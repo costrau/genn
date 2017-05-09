@@ -51,7 +51,7 @@ void signalHandler(int status)
 */
 //--------------------------------------------------------------------------
 
-void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust)
+void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust, const cv::Mat &thresholdedFrame, std::mutex &patternMutex)
 {
     typedef std::chrono::duration<double, std::milli> double_ms;
 
@@ -71,6 +71,7 @@ void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust)
     const double_ms dtDurationMs{DT};
     const sim_clock::duration dtDuration = std::chrono::duration_cast<sim_clock::duration>(dtDurationMs);
 
+    float activity[10];
 #ifndef CPU_ONLY
     if (which == GPU){
         while (g_SignalStatus == 0)
@@ -85,10 +86,11 @@ void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust)
             fprintf(timeros, "%f %f %f \n", neuron_tme, synapse_tme, learning_tme);
 #endif
             locust.sum_spikes();
-            locust.outputDN_spikes(osf2, which);
+            //locust.outputDN_spikes(osf2, which);
 
-            fprintf(osf, "%f ", t);
-            fprintf(osf,"\n");
+
+           // fprintf(osf, "%f ", t);
+            //fprintf(osf,"\n");
 
             const auto stepEnd = sim_clock::now();
             const auto stepLength = stepEnd - stepStart;
@@ -111,13 +113,33 @@ void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust)
             // Get time step started at
             const auto stepStart = sim_clock::now();
 
-            locust.runCPU(DT); // run next batch
+            locust.runCPU(DT, thresholdedFrame.data, patternMutex); // run next batch
 
 #ifdef TIMING
             fprintf(timeros, "%f %f %f \n", neuron_tme, synapse_tme, learning_tme);
 #endif
+
             locust.sum_spikes();
-            locust.outputDN_spikes(osf2, which);
+            //locust.outputDN_spikes(osf2, which);
+
+
+            for(unsigned int d = 0; d < glbSpkCntDN[0]; d++)
+            {
+                activity[glbSpkDN[d]] += 1.0f;
+            }
+
+            float highest = 0.0f;
+            int best = -1;
+            for(unsigned int n = 0; n < 10; n++)
+            {
+                activity[n] *= 0.7f;
+
+                if(activity[n] > highest){
+                    best = n;
+                    highest = activity[n];
+                }
+            }
+            printf("Classification:%u\n", best);
 
             const auto stepEnd = sim_clock::now();
             const auto stepLength = stepEnd - stepStart;
@@ -136,7 +158,7 @@ void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust)
     printf("Ran for %fms, overran by %fms and slept for %fms\n", t, double_ms(totalOverrunTime).count() , double_ms(totalSleepTime).count());
 }
 
-void cameraThreadHandler(unsigned int device)
+void cameraThreadHandler(unsigned int device, cv::Mat &thresholdedFrame, std::mutex &patternMutex)
 {
     typedef std::chrono::duration<double> double_s;
 
@@ -145,7 +167,6 @@ void cameraThreadHandler(unsigned int device)
     if(!camera.isOpened()) {
         throw std::runtime_error("Cannot open camera");
     }
-
 
     // Get frame dimensions
     const unsigned int width = camera.get(CV_CAP_PROP_FRAME_WIDTH);
@@ -164,7 +185,6 @@ void cameraThreadHandler(unsigned int device)
     cv::Mat squareROI = rawFrame(square);
     cv::Mat greyscaleFrame;
     cv::Mat downsampledFrame;
-    cv::Mat thresholdedFrame;
 
     cv::namedWindow("Frame", CV_WINDOW_NORMAL);
     cv::namedWindow("Thresholded", CV_WINDOW_NORMAL);
@@ -188,14 +208,18 @@ void cameraThreadHandler(unsigned int device)
                    cv::Size(32, 32));
         cv::imshow("Frame", downsampledFrame);
 
+        // Calculate mean and standard deviation of downsampled image pixels
         cv::Scalar mean;
         cv::Scalar stdDev;
         cv::meanStdDev(downsampledFrame, mean, stdDev);
 
-        //cv::threshold(downsampledFrame, thresholdedFrame, mean + stdDev, 0.0, THRESH_TRUNC);
-        cv::threshold(downsampledFrame, thresholdedFrame, mean.val[0] - stdDev.val[0], 255.0, CV_THRESH_BINARY_INV);
-        cv::imshow("Thresholded", thresholdedFrame);
+        // Use this to threshold image
+        {
+            std::lock_guard<std::mutex> lock(patternMutex);
+            cv::threshold(downsampledFrame, thresholdedFrame, mean.val[0] - stdDev.val[0], 255.0, CV_THRESH_BINARY_INV);
+        }
 
+        cv::imshow("Thresholded", thresholdedFrame);
         cv::waitKey(1);
     }
 
@@ -286,17 +310,17 @@ int main(int argc, char *argv[])
     timer.startTimer();
 #endif
 
-    fprintf(stdout, "# reading input patterns ... \n");
-    name= OutDir+ "/"+ toString(argv[1]) + toString(".inpat");
-    f= fopen(name.c_str(), "rb");
-    locust.read_input_patterns(f);
-    fclose(f);
+    //fprintf(stdout, "# reading input patterns ... \n");
+    //name= OutDir+ "/"+ toString(argv[1]) + toString(".inpat");
+    //f= fopen(name.c_str(), "rb");
+    //locust.read_input_patterns(f);
+    //fclose(f);
 
 #ifdef TIMING
-    timer.stopTimer();
-    tme= timer.getElapsedTime();
-    fprintf(timeros, "%% Reading input patterns: %f \n", tme);
-    timer.startTimer();
+    //timer.stopTimer();
+    //tme= timer.getElapsedTime();
+    //fprintf(timeros, "%% Reading input patterns: %f \n", tme);
+    //timer.startTimer();
 #endif
 
     locust.generate_baserates();
@@ -315,11 +339,15 @@ int main(int argc, char *argv[])
 
     fprintf(stdout, "# neuronal circuitery built, start computation ... \n\n");
 
+    // Handle interrupt (ctrl-c) signal
     std::signal(SIGINT, signalHandler);
 
+    std::mutex patternMutex;
+    cv::Mat thresholdedFrame(32, 32, CV_8UC3);
+
     // Start threads
-    std::thread gennThread(gennThreadHandler, which, osf, osf2, std::ref(locust));
-    std::thread cameraThread(cameraThreadHandler, 0);
+    std::thread gennThread(gennThreadHandler, which, osf, osf2, std::ref(locust), std::ref(thresholdedFrame), std::ref(patternMutex));
+    std::thread cameraThread(cameraThreadHandler, 0, std::ref(thresholdedFrame), std::ref(patternMutex));
     gennThread.join();
     cameraThread.join();
 

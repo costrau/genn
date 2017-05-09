@@ -32,8 +32,8 @@ classol::classol()
   modelDefinition(model);
 
   auto *pn = model.findNeuronGroup("PN");
-  p_pattern= new scalar[pn->getNumNeurons()*PATTERNNO];
-  pattern= new uint64_t[pn->getNumNeurons()*PATTERNNO];
+  p_pattern= new scalar[pn->getNumNeurons()];
+  pattern= new uint64_t[pn->getNumNeurons()];
   baserates= new uint64_t[pn->getNumNeurons()];
   allocateMem();
   initialize();
@@ -76,7 +76,7 @@ void classol::allocate_device_mem_patterns()
 
   // allocate device memory for input patterns
   auto *pn = model.findNeuronGroup("PN");
-  size= pn->getNumNeurons()*PATTERNNO*sizeof(uint64_t);
+  size= pn->getNumNeurons()*sizeof(uint64_t);
   CHECK_CUDA_ERRORS(cudaMalloc((void**) &d_pattern, size));
   fprintf(stdout, "allocated %lu elements for pattern.\n", size/sizeof(uint64_t));
   CHECK_CUDA_ERRORS(cudaMemcpy(d_pattern, pattern, size, cudaMemcpyHostToDevice));
@@ -314,7 +314,7 @@ void classol::read_input_patterns(FILE *f //!< File handle for a file containing
 {
   // we use a predefined pattern number
     auto *pn = model.findNeuronGroup("PN");
-    int sz= pn->getNumNeurons()*PATTERNNO;
+    int sz= pn->getNumNeurons();
     double *tmpp= new double[sz];
     unsigned int retval = fread(tmpp, 1, sz*sizeof(double),f);
     importArray(p_pattern, tmpp, sz);
@@ -324,7 +324,7 @@ void classol::read_input_patterns(FILE *f //!< File handle for a file containing
 	fprintf(stdout, "%f ", p_pattern[i]);
     }
     fprintf(stdout, "\n\n");
-    convertRateToRandomNumberThreshold(p_pattern, pattern, pn->getNumNeurons()*PATTERNNO);
+    convertRateToRandomNumberThreshold(p_pattern, pattern, pn->getNumNeurons());
     delete[] tmpp;
 }
 
@@ -340,7 +340,7 @@ void classol::generate_baserates()
     uint64_t inputBase;
     convertRateToRandomNumberThreshold(&InputBaseRate, &inputBase, 1);
     for (int i= 0; i <  pn->getNumNeurons(); i++) {
-	baserates[i]= inputBase;
+        baserates[i]= inputBase;
     }
     fprintf(stdout, "generated basereates ... \n");
     fprintf(stdout, "baserate value: %f ", InputBaseRate);
@@ -356,19 +356,17 @@ void classol::generate_baserates()
 void classol::runGPU(scalar runtime //!< Duration of time to run the model for 
 		  )
 {
-  auto *pn = model.findNeuronGroup("PN");
-  unsigned int pno;
-  int riT= (int) (runtime/DT+1e-6);
+    auto *pn = model.findNeuronGroup("PN");
+    int riT= (int) (runtime/DT+1e-6);
 
-  for (int i= 0; i < riT; i++) {
-      if (iT%patSetTime == 0) {
-	  pno= (iT/patSetTime)%PATTERNNO;
-	  ratesPN= d_pattern;
-	  offsetPN= pno*pn->getNumNeurons();
+    for (int i= 0; i < riT; i++) {
+        if (iT%patSetTime == 0) {
+            ratesPN= d_pattern;
+            offsetPN= 0;
       }
       if (iT%patSetTime == patFireTime) {
-	  ratesPN= d_baserates;
-	  offsetPN= 0;
+        ratesPN= d_baserates;
+        offsetPN= 0;
       }
       stepTimeGPU();
   }
@@ -380,22 +378,30 @@ void classol::runGPU(scalar runtime //!< Duration of time to run the model for
  */
 //--------------------------------------------------------------------------
 
-void classol::runCPU(scalar runtime //!< Duration of time to run the model for 
-		  )
+void classol::runCPU(scalar runtime, //!< Duration of time to run the model for
+                     unsigned char* data,
+                     std::mutex &mutex)
 {
   auto *pn = model.findNeuronGroup("PN");
-  unsigned int pno;
   int riT= (int) (runtime/DT);
-
+     const float fac = pow(2.0, (double) sizeof(uint64_t)*8-16)*DT;
   for (int i= 0; i < riT; i++) {
     if (iT%patSetTime == 0) {
-      pno= (iT/patSetTime)%PATTERNNO;
-      ratesPN= pattern;
-      offsetPN= pno*pn->getNumNeurons();
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+
+            for (int n= 0; n < pn->getNumNeurons(); n++) {
+                float floatData = (data[n] == 0) ? 2.0E-4f : 1.0f;
+                pattern[n]= (uint64_t) (floatData * fac);
+                //std::cout << pattern[n] << ",";
+            }
+        }
+        ratesPN= pattern;
+        offsetPN= 0;
     }
     if (iT%patSetTime == patFireTime) {
-	ratesPN= baserates;
-	offsetPN= 0;
+        ratesPN= baserates;
+        offsetPN= 0;
     }
 
     stepTimeCPU();

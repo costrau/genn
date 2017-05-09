@@ -35,7 +35,6 @@
 // we will hard-code some stuff ... because at the end of the day that is 
 // what we will do for the CUDA version
 
-#define PATTERNNO 100
 scalar InputBaseRate= 2e-04;
 //----------------------------------------------------------------------
 // other stuff:

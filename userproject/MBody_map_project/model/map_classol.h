@@ -15,6 +15,10 @@
 #ifndef CLASSOL_H
 #define CLASSOL_H
 
+// Standard C++ includes
+#include <mutex>
+
+// Standard C includes
 #include <stdint.h>
 
 //--------------------------------------------------------------------------
@@ -70,7 +74,7 @@ private:
   void read_input_patterns(FILE *); 
   void generate_baserates(); 
   void runGPU(scalar); 
-  void runCPU(scalar); 
+  void runCPU(scalar, unsigned char*, std::mutex &mutex);
   void output_state(FILE *, unsigned int); 
   void getSpikesFromGPU(); 
   void getSpikeNumbersFromGPU(); 
