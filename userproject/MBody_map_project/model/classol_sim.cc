@@ -71,7 +71,7 @@ void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust, const 
     const double_ms dtDurationMs{DT};
     const sim_clock::duration dtDuration = std::chrono::duration_cast<sim_clock::duration>(dtDurationMs);
 
-    float activity[10];
+    float activity[10] = {0.0f};
 #ifndef CPU_ONLY
     if (which == GPU){
         while (g_SignalStatus == 0)
@@ -139,7 +139,13 @@ void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust, const 
                     highest = activity[n];
                 }
             }
-            printf("Classification:%u\n", best);
+
+            if(best == -1) {
+                std::cout << "No classification" << std::endl;
+            }
+            else {
+                std::cout << "Classification:" << best << std::endl;
+            }
 
             const auto stepEnd = sim_clock::now();
             const auto stepLength = stepEnd - stepStart;
@@ -343,7 +349,7 @@ int main(int argc, char *argv[])
     std::signal(SIGINT, signalHandler);
 
     std::mutex patternMutex;
-    cv::Mat thresholdedFrame(32, 32, CV_8UC3);
+    cv::Mat thresholdedFrame(32, 32, CV_8U);
 
     // Start threads
     std::thread gennThread(gennThreadHandler, which, osf, osf2, std::ref(locust), std::ref(thresholdedFrame), std::ref(patternMutex));
