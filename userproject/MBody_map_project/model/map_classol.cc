@@ -382,30 +382,30 @@ void classol::runCPU(scalar runtime, //!< Duration of time to run the model for
                      unsigned char* data,
                      std::mutex &mutex)
 {
-  auto *pn = model.findNeuronGroup("PN");
-  int riT= (int) (runtime/DT);
-     const float fac = pow(2.0, (double) sizeof(uint64_t)*8-16)*DT;
-  for (int i= 0; i < riT; i++) {
-    if (iT%patSetTime == 0) {
-        {
-            std::lock_guard<std::mutex> lock(mutex);
+    auto *pn = model.findNeuronGroup("PN");
+    int riT= (int) (runtime/DT);
+    const float fac = pow(2.0, (double) sizeof(uint64_t)*8-16)*DT;
+    for (int i= 0; i < riT; i++) {
+        if (iT%patSetTime == 0) {
+            {
+                std::lock_guard<std::mutex> lock(mutex);
 
-            for (int n= 0; n < pn->getNumNeurons(); n++) {
-                float floatData = (data[n] == 0) ? 2.0E-4f : 1.0f;
-                pattern[n]= (uint64_t) (floatData * fac);
-                //std::cout << pattern[n] << ",";
+                for (int n= 0; n < pn->getNumNeurons(); n++) {
+                    float floatData = (data[n] == 0) ? 2.0E-4f : 1.0f;
+                    pattern[n]= (uint64_t) (floatData * fac);
+                    //std::cout << pattern[n] << ",";
+                }
             }
+            ratesPN= pattern;
+            offsetPN= 0;
         }
-        ratesPN= pattern;
-        offsetPN= 0;
-    }
-    if (iT%patSetTime == patFireTime) {
-        ratesPN= baserates;
-        offsetPN= 0;
-    }
+        if (iT%patSetTime == patFireTime) {
+            ratesPN= baserates;
+            offsetPN= 0;
+        }
 
-    stepTimeCPU();
-  }
+        stepTimeCPU();
+    }
 }
 //--------------------------------------------------------------------------
 // output functions
