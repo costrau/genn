@@ -132,7 +132,7 @@ void gennThreadHandler(int which, FILE *osf, FILE *osf2, classol &locust, const 
             int best = -1;
             for(unsigned int n = 0; n < 10; n++)
             {
-                activity[n] *= 0.7f;
+                activity[n] *= 0.995f;
 
                 if(activity[n] > highest){
                     best = n;
@@ -197,6 +197,12 @@ void cameraThreadHandler(unsigned int device, cv::Mat &thresholdedFrame, std::mu
     cv::resizeWindow("Frame", 320, 320);
     cv::resizeWindow("Thresholded", 320, 320);
 
+     // Create array of indices to use for subsequent indirect sorting of pixels
+    std::array<unsigned int, 32 * 32> indices;
+    std::iota(indices.begin(), indices.end(), 0);
+
+    const unsigned int numActive = (32 * 32) / 10;
+
     const auto cameraBegin = sim_clock::now();
     unsigned int i;
     for (i = 0; g_SignalStatus == 0; i++)
@@ -214,8 +220,30 @@ void cameraThreadHandler(unsigned int device, cv::Mat &thresholdedFrame, std::mu
                    cv::Size(32, 32));
         cv::imshow("Frame", downsampledFrame);
 
+        // Indirectly sort downsampled pixels based on their intensity
+        std::sort(indices.begin(), indices.end(),
+                  [&downsampledFrame](unsigned int a, unsigned int b)
+                  {
+                      return (downsampledFrame.data[a] < downsampledFrame.data[b]);
+                  });
+
+        {
+            std::lock_guard<std::mutex> lock(patternMutex);
+
+            // Set first 'numActive' sorted pixels to on
+            for(unsigned int j = 0; j < numActive; j++)
+            {
+                thresholdedFrame.data[indices[j]] = 0xFF;
+            }
+
+            // Set remainder to off
+            for(unsigned int j = numActive; j < (32 * 32); j++)
+            {
+                thresholdedFrame.data[indices[j]] = 0;
+            }
+        }
         // Calculate mean and standard deviation of downsampled image pixels
-        cv::Scalar mean;
+        /*cv::Scalar mean;
         cv::Scalar stdDev;
         cv::meanStdDev(downsampledFrame, mean, stdDev);
 
@@ -223,7 +251,7 @@ void cameraThreadHandler(unsigned int device, cv::Mat &thresholdedFrame, std::mu
         {
             std::lock_guard<std::mutex> lock(patternMutex);
             cv::threshold(downsampledFrame, thresholdedFrame, mean.val[0] - stdDev.val[0], 255.0, CV_THRESH_BINARY_INV);
-        }
+        }*/
 
         cv::imshow("Thresholded", thresholdedFrame);
         cv::waitKey(1);
