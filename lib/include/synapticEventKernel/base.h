@@ -34,33 +34,43 @@ public:
     //!< of synapse groups and write it to the CodeStream
     void generateKernel(CodeStream &os, bool isResetKernel) const = 0;
 
-    //!< Get the name of the kernel (used to call it from runner)
-    std::string getKernelName() const = 0;
-
     //------------------------------------------------------------------------
     // Public API
     //------------------------------------------------------------------------
     //!< Add a synapse group to be generated with this event kernel generator
-    void addSynapseGroup(const SynapseGroup &sg);
+    void addSynapseGroup(SynapseGroupIter sg);
 
-    //!< Re-evaluate grid based on new block size
-    void updateGrid(unsigned int blockSize);
+    //!< Set block size and re-evaluate grid based on new block size
+    void setBlockSize(unsigned int blockSize);
 
     //!< Write code to define grid and call kernel
-    void writeKernelCall(CodeStream &os) const;
+    void writeKernelCall(CodeStream &os, bool timingEnabled) const;
 
     //!< Is this kernel in use
     bool isUsed() const{ return !m_Grid.empty(); }
 
 protected:
     //------------------------------------------------------------------------
+    // Declared virtuals
+    //------------------------------------------------------------------------
+    //!< Determine how many threads this synapse group
+    //!< requires, taking into account block size etc
+    virtual unsigned int getPaddedSize(const SynapseGroup &sg) const = 0;
+
+    //!< Get the name of the kernel (used to call it from runner)
+    virtual std::string getKernelName() const = 0;
+
+    //------------------------------------------------------------------------
     // Protected API
     //------------------------------------------------------------------------
     //!< Write kernel function declaration to code stream
-    void writeKernelDeclaration(CodeStream &os) const;
+    void writeKernelDeclaration(CodeStream &os, const std::string &ftype) const;
 
     //!< Gets current block size
     unsigned int getBlockSize() const{ return m_BlockSize; }
+
+    //!< Gets grid to simulate in this kernel
+    const std::vector<std::pair<SynapseGroupIter, unsigned int>> &getGrid() const{ return m_Grid; }
 
 private:
     //------------------------------------------------------------------------
@@ -71,7 +81,7 @@ private:
 
     //!< Synapse groups and the ids at which they end
     //!< **NOTE** first synapse group always starts at 0
-    std::vector<std::tuple<SynapseGroupIter, unsigned int>> m_Grid;
+    std::vector<std::pair<SynapseGroupIter, unsigned int>> m_Grid;
 
     //!< How large is the block size used by this kernel
     unsigned int m_BlockSize;

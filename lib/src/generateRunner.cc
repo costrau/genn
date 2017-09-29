@@ -1529,7 +1529,7 @@ void genRunner(const NNmodel &model, //!< Model description
 #ifndef CPU_ONLY
 void genRunnerGPU(const NNmodel &model, //!< Model description
                   const string &path //!< Path for code generation
-    )
+                  const std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
 {
 //    cout << "entering GenRunnerGPU" << std::endl;
     string name= path + "/" + model.getName() + "_CODE/runnerGPU.cc";
@@ -2134,16 +2134,8 @@ void genRunnerGPU(const NNmodel &model, //!< Model description
     os << "// ------------------------------------------------------------------------" << std::endl;
     os << "// the time stepping procedure (using GPU)" << std::endl;
     os << "void stepTimeGPU()" << std::endl;
-    os << CodeStream::OB(1130) << std::endl;
+    os << CodeStream::OB( ) << std::endl;
 
-    if (!model.getSynapseGroups().empty()) {
-        unsigned int synapseGridSz = model.getSynapseKernelGridSize();
-        os << "//model.padSumSynapseTrgN[model.synapseGrpN - 1] is " << synapseGridSz << std::endl;
-        synapseGridSz = synapseGridSz / synapseBlkSz;
-        os << "dim3 sThreads(" << synapseBlkSz << ", 1);" << std::endl;
-        os << "dim3 sGrid(" << synapseGridSz << ", 1);" << std::endl;
-        os << std::endl;
-    }
     if (!model.getSynapsePostLearnGroups().empty()) {
         const unsigned int learnGridSz = ceil((float)model.getSynapsePostLearnGridSize() / learnBlkSz);
         os << "dim3 lThreads(" << learnBlkSz << ", 1);" << std::endl;
@@ -2182,16 +2174,14 @@ void genRunnerGPU(const NNmodel &model, //!< Model description
                 os << "cudaEventRecord(synDynStop);" << std::endl;
             }
         }
-        if (model.isTimingEnabled()) {
-            os << "cudaEventRecord(synapseStart);" << std::endl;
-        }
-        os << "calcSynapses <<< sGrid, sThreads >>> (";
-        for(const auto &p : model.getSynapseKernelParameters()) {
-            os << p.first << ", ";
-        }
-        os << "t);" << std::endl;
-        if (model.isTimingEnabled()) {
-            os << "cudaEventRecord(synapseStop);" << std::endl;
+
+        // Loop through synaptic event kernels
+        // **TODO** streams
+        for(const auto &s : synapticEventKernels) {
+            // If this kernel is in use, write call
+            if(s->isUsed()) {
+                s->writeKernelCall(os, model.isTimingEnabled());
+            }
         }
 
         if (!model.getSynapsePostLearnGroups().empty()) {

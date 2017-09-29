@@ -213,19 +213,11 @@ public:
     //! the synapse dynamics kernel (padded to multiples of the GPU thread block size)
     const map<string, std::pair<unsigned int, unsigned int>> &getSynapseDynamicsGroups() const{ return m_SynapseDynamicsGroups; }
 
-    //! Gets std::map containing names and types of each parameter that should be passed through to the synapse kernel
-    const map<string, string> &getSynapseKernelParameters() const{ return synapseKernelParameters; }
-
     //! Gets std::map containing names and types of each parameter that should be passed through to the postsynaptic learning kernel
     const map<string, string> &getSimLearnPostKernelParameters() const{ return simLearnPostKernelParameters; }
 
     //! Gets std::map containing names and types of each parameter that should be passed through to the synapse dynamics kernel
     const map<string, string> &getSynapseDynamicsKernelParameters() const{ return synapseDynamicsKernelParameters; }
-
-    //! Gets the size of the synapse kernel thread grid
-    /*! This is calculated by adding together the number of threads required by each
-        synapse population's synapse kernel, padded to be a multiple of GPU's thread block size.*/
-    unsigned int getSynapseKernelGridSize() const;
 
     //! Gets the size of the post-synaptic learning kernel thread grid
     /*! This is calculated by adding together the number of threads required by each
@@ -356,7 +348,6 @@ private:
 
     // Kernel members
     map<string, string> neuronKernelParameters;
-    map<string, string> synapseKernelParameters;
     map<string, string> simLearnPostKernelParameters;
     map<string, string> synapseDynamicsKernelParameters;
 

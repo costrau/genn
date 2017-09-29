@@ -1,5 +1,8 @@
 #include "synapticEventKernel/postParallelisedSparse.h"
 
+// GeNN includes
+#include "standardSubstitutions.h"
+
 //----------------------------------------------------------------------------
 // SynapticEventKernel::PostParallelisedSparse
 //----------------------------------------------------------------------------
@@ -27,11 +30,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
     const unsigned int numSynapseBlocks = model.getSynapseKernelGridSize() / synapseBlkSz;
 
     // synapse kernel header
-    os << "extern \"C\" __global__ void " << getKernelName() << "(";
-    for (const auto &p : model.getSynapseKernelParameters()) {
-        os << p.second << " " << p.first << ", ";
-    }
-    os << model.getPrecision() << " t)" << std::endl; // end of synapse kernel header
+    writeKernelDeclaration(os, model.getPrecision());
 
     // synapse kernel code
     os << CodeStream::OB(75);
@@ -46,7 +45,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
 
     // If any of the synapse groups are small enough, declare shared memory array to sum per-neuron outputs
     if(std::any_of(synapseGroups.cbegin(), SynapseGroups.cend(),
-        [](const SynapseGroupIter &s){ return s.second.getTrgNeuronGroup()->getNumNeurons() <= synapseBlkSz; }))
+        [this](const SynapseGroupIter &s){ return s.second.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize(); }))
     {
         os << model.getPrecision() << " linSyn;" << std::endl;
         os << "volatile __shared__ " << model.getPrecision() << " shLg[BLOCKSZ_SYN];" << std::endl;
@@ -143,6 +142,11 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
     }
 }
 //----------------------------------------------------------------------------
+unsigned int SynapticEventKernel::PostParallelisedSparse::getPaddedSize(const SynapseGroup &sg)
+{
+    return (unsigned int)(ceil((double)sg.getMaxConnections() / (double)getBlockSize()) * (double)getBlockSize());
+}
+//----------------------------------------------------------------------------
 void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
     CodeStream &os, //!< output stream for code
     const SynapseGroup &sg,
@@ -152,7 +156,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
     const bool evnt = (postfix == "Evnt");
     const int UIntSz = sizeof(unsigned int) * 8;
     const auto *wu = sg.getWUModel();
-    const bool useSharedMemory = (sg.getTrgNeuronGroup()->getNumNeurons() <= synapseBlkSz);
+    const bool useSharedMemory = (sg.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize());
 
     // Create iteration context to iterate over the variables; derived and extra global parameters
     DerivedParamNameIterCtx wuDerivedParams(wu->getDerivedParams());

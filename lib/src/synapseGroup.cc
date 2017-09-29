@@ -82,29 +82,6 @@ void SynapseGroup::initDerivedParams(double dt)
     }
 }
 
-void SynapseGroup::calcKernelSizes(unsigned int blockSize, unsigned int &paddedKernelIDStart)
-{
-    m_PaddedKernelIDRange.first = paddedKernelIDStart;
-
-    if (getSpanType() == SpanType::PRESYNAPTIC) {
-        // paddedSize is the lowest multiple of blockSize >= neuronN[synapseSource[i]
-        paddedKernelIDStart += ceil((double) getSrcNeuronGroup()->getNumNeurons() / (double) blockSize) * (double) blockSize;
-    }
-    else {
-        if (getMatrixType() & SynapseMatrixConnectivity::SPARSE) {
-            // paddedSize is the lowest multiple of blockSize >= maxConn[i]
-            paddedKernelIDStart += ceil((double) getMaxConnections() / (double) blockSize) * (double) blockSize;
-        }
-        else {
-            // paddedSize is the lowest multiple of blockSize >= neuronN[synapseTarget[i]]
-            paddedKernelIDStart += ceil((double) getTrgNeuronGroup()->getNumNeurons() / (double) blockSize) * (double) blockSize;
-        }
-    }
-
-    // Store padded cumulative sum
-    m_PaddedKernelIDRange.second = paddedKernelIDStart;
-}
-
 unsigned int SynapseGroup::getPaddedDynKernelSize(unsigned int blockSize) const
 {
     if (getMatrixType() & SynapseMatrixConnectivity::SPARSE) {

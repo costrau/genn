@@ -247,17 +247,6 @@ void NNmodel::activateDirectInput(
     gennError("This function has been deprecated since GeNN 2.2. Use neuron variables, extraGlobalNeuronKernelParameters, or parameters instead.");
 }
 
-unsigned int NNmodel::getSynapseKernelGridSize() const
-{
-    if(m_SynapseGroups.empty()) {
-        return 0;
-    }
-    else {
-        return  m_SynapseGroups.rbegin()->second.getPaddedKernelIDRange().second;
-    }
-
-}
-
 unsigned int NNmodel::getSynapsePostLearnGridSize() const
 {
     if(m_SynapsePostLearnGroups.empty()) {
@@ -704,13 +693,8 @@ void NNmodel::setPopulationSums()
     }
 
     // SYNAPSE groups
-    unsigned int paddedSynapseKernelIDStart = 0;
     unsigned int paddedSynapseDynamicsIDStart = 0;
     unsigned int paddedSynapsePostLearnIDStart = 0;
-    for(auto &s : m_SynapseGroups) {
-        // Calculate synapse kernel sizes
-        s.second.calcKernelSizes(synapseBlkSz, paddedSynapseKernelIDStart);
-
         if (!s.second.getWUModel()->getLearnPostCode().empty()) {
             const unsigned int startID = paddedSynapsePostLearnIDStart;
             paddedSynapsePostLearnIDStart += s.second.getPaddedPostLearnKernelSize(learnBlkSz);
@@ -815,7 +799,6 @@ void NNmodel::finalize()
 
         // Make extra global parameter lists
         s.second.addExtraGlobalNeuronParams(neuronKernelParameters);
-        s.second.addExtraGlobalSynapseParams(synapseKernelParameters);
         s.second.addExtraGlobalPostLearnParams(simLearnPostKernelParameters);
         s.second.addExtraGlobalSynapseDynamicsParams(synapseDynamicsKernelParameters);
     }

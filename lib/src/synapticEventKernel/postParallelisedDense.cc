@@ -1,5 +1,9 @@
 #include "synapticEventKernel/postParallelisedDense.h"
 
+// GeNN includes
+#include "standardSubstitutions.h"
+
+
 //----------------------------------------------------------------------------
 // SynapticEventKernel::PostParallelisedDense
 //----------------------------------------------------------------------------
@@ -22,16 +26,8 @@ int SynapticEventKernel::PostParallelisedDense::getCompatibility(const SynapseGr
 //----------------------------------------------------------------------------
 void SynapticEventKernel::PostParallelisedDense::generateKernel(CodeStream &os, bool isResetKernel) const override
 {
-    // count how many neuron blocks to use: one thread for each synapse target
-    // targets of several input groups are counted multiply
-    const unsigned int numSynapseBlocks = model.getSynapseKernelGridSize() / synapseBlkSz;
-
     // synapse kernel header
-    os << "extern \"C\" __global__ void " << getKernelName() << "(";
-    for (const auto &p : model.getSynapseKernelParameters()) {
-        os << p.second << " " << p.first << ", ";
-    }
-    os << model.getPrecision() << " t)" << std::endl; // end of synapse kernel header
+    writeKernelDeclaration(os, model.getPrecision());
 
     // synapse kernel code
     os << CodeStream::OB(75);
@@ -129,7 +125,12 @@ void SynapticEventKernel::PostParallelisedDense::generateKernel(CodeStream &os, 
     }
 }
 //----------------------------------------------------------------------------
-void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
+unsigned int SynapticEventKernel::PostParallelisedDense::getPaddedSize(const SynapseGroup &sg)
+{
+    return (unsigned int)(ceil((double)sg.getTrgNeuronGroup()->getNumNeurons() / (double)getBlockSize()) * (double)getBlockSize());
+}
+//----------------------------------------------------------------------------
+void SynapticEventKernel::PostParallelisedDense::generateInnerLoop(
     CodeStream &os, //!< output stream for code
     const SynapseGroup &sg,
     const string &postfix, //!< whether to generate code for true spikes or spike type events

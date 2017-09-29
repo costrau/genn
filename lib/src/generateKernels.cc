@@ -39,7 +39,7 @@
 namespace
 {
 // Various means by which postsynaptic-parallelised synapses can provide neurons with input
-enum class PostsynapticInputType
+/*enum class PostsynapticInputType
 {
     REGISTER,
     SHARED_MEMORY,
@@ -95,7 +95,7 @@ bool shouldSynapseGroupUseSharedSparse(const SynapseGroup &sg)
     else {
         return false;
     }
-}
+}*/
 
 string getFloatAtomicAdd(const string &ftype)
 {
@@ -110,7 +110,7 @@ string getFloatAtomicAdd(const string &ftype)
     }
 }
 // parallelisation along pre-synaptic spikes, looped over post-synaptic neurons
-void generatePreParallelisedCode(
+/*void generatePreParallelisedCode(
     CodeStream &os, //!< output stream for code
     const SynapseGroup &sg,
     const string &localID, //!< the variable name of the local ID of the thread within the synapse group
@@ -395,7 +395,7 @@ void generatePostParallelisedCode(
     }
     os << CodeStream::CB(110) << std::endl;
     os << CodeStream::CB(90) << std::endl;
-}
+}*/
 //-------------------------------------------------------------------------
 /*!
   \brief Function for generating the CUDA synapse kernel code that handles presynaptic
@@ -403,7 +403,7 @@ void generatePostParallelisedCode(
 
 */
 //-------------------------------------------------------------------------
-void generate_process_presynaptic_events_code(
+/*void generate_process_presynaptic_events_code(
     CodeStream &os, //!< output stream for code
     const SynapseGroup &sg,
     const string &localID, //!< the variable name of the local ID of the thread within the synapse group
@@ -422,7 +422,7 @@ void generate_process_presynaptic_events_code(
             generatePostParallelisedCode(os, sg, localID, postfix, ftype);
         }
     }
-}
+}*/
 
 void genSynapseDynamics(const NNmodel &model, //!< Model description
                         CodeStream &os) //!< Code stream to write code to
@@ -677,7 +677,7 @@ void genSynapsePostLearn(const NNmodel &model, //!< Model description
     os << CodeStream::CB(215);
 }
 
-void genSynapseEventProcessing(const NNmodel &model, //!< Model description
+/*void genSynapseEventProcessing(const NNmodel &model, //!< Model description
                                CodeStream &os) //!< Code stream to write code to
 {
     // count how many neuron blocks to use: one thread for each synapse target
@@ -889,7 +889,7 @@ void genSynapseEventProcessing(const NNmodel &model, //!< Model description
     }
     os << CodeStream::CB(75);
     os << std::endl;
-}
+}*/
 }   // Anonymous namespace
 
 //-------------------------------------------------------------------------
@@ -1248,7 +1248,8 @@ void genNeuronKernel(const NNmodel &model, //!< Model description
 //-------------------------------------------------------------------------
 
 void genSynapseKernel(const NNmodel &model, //!< Model description
-                      const string &path) //!< Path for code generation
+                      const string &path, //!< Path for code generation
+                      const std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
 {
     ofstream fs;
     string name = path + "/" + model.getName() + "_CODE/synapseKrnl.cc";
@@ -1284,8 +1285,13 @@ void genSynapseKernel(const NNmodel &model, //!< Model description
 
     ///////////////////////////////////////////////////////////////
     // Kernel for processing true spikes and spike-like events
-    genSynapseEventProcessing(model, os);
-
+    // Loop through synaptic event kernels
+    for(const auto &s : synapticEventKernels) {
+        // If this kernel is in use, generate kernel function
+        if(s->isUsed()) {
+            s->generateKernel(os, isResetKernel);
+        }
+    }
 
     ///////////////////////////////////////////////////////////////
     // Kernel for learning synapses, post-synaptic spikes
