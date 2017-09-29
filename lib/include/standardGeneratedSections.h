@@ -1,6 +1,7 @@
 #pragma once
 
 // Standard includes
+#include <map>
 #include <string>
 
 // GeNN includes
@@ -17,7 +18,7 @@ class NeuronGroup;
 //----------------------------------------------------------------------------
 namespace StandardGeneratedSections
 {
-void neuronOutputInit(
+void neuronResetKernel(
     CodeStream &os,
     const NeuronGroup &ng,
     const std::string &devPrefix);
@@ -43,4 +44,8 @@ void neuronSpikeEventTest(
     const ExtraGlobalParamNameIterCtx &nmExtraGlobalParams,
     const std::string &localID,
     const std::string &ftype);
+
+void resetKernel(
+    CodeStream &os,
+    const std::map<std::string, NeuronGroup> &ngs);
 }   // namespace StandardGeneratedSections

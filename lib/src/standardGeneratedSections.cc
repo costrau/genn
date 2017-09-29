@@ -7,7 +7,7 @@
 //----------------------------------------------------------------------------
 // StandardGeneratedSections
 //----------------------------------------------------------------------------
-void StandardGeneratedSections::neuronOutputInit(
+void StandardGeneratedSections::neuronResetKernel(
     CodeStream &os,
     const NeuronGroup &ng,
     const std::string &devPrefix)
@@ -28,7 +28,10 @@ void StandardGeneratedSections::neuronOutputInit(
         if (ng.isSpikeEventRequired()) {
             os << devPrefix << "glbSpkCntEvnt" << ng.getName() << "[0] = 0;" << std::endl;
         }
-        os << devPrefix << "glbSpkCnt" << ng.getName() << "[0] = 0;" << std::endl;
+
+        if (ng.isTrueSpikeRequired()) {
+            os << devPrefix << "glbSpkCnt" << ng.getName() << "[0] = 0;" << std::endl;
+        }
     }
 }
 //----------------------------------------------------------------------------
@@ -101,4 +104,22 @@ void StandardGeneratedSections::neuronSpikeEventTest(
         // Close scope for spike-like event test
         os << CodeStream::CB(31);
     }
+}
+//----------------------------------------------------------------------------
+void StandardGeneratedSections::resetKernel(
+    CodeStream &os,
+    const std::map<std::string, NeuronGroup> &ngs)
+{
+    os << "__syncthreads();" << std::endl;
+    os << "if (threadIdx.x == 0)" << CodeStream::OB(200);
+    os << "j = atomicAdd((unsigned int *) &d_done, 1);" << std::endl;
+    os << "if (j == " << numSynapseBlocks - 1 << ")" << CodeStream::OB(210);
+
+    for(const auto &n : model.getNeuronGroups()) {
+        neuronResetKernel(os, n.second, "dd_");
+    }
+    os << "d_done = 0;" << std::endl;
+
+    os << CodeStream::CB(210); // end "if (j == " << numOfBlocks - 1 << ")"
+    os << CodeStream::CB(200); // end "if (threadIdx.x == 0)"
 }

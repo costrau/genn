@@ -977,7 +977,7 @@ void genNeuronKernel(const NNmodel &model, //!< Model description
     if (model.getResetKernel() == GENN_FLAGS::calcNeurons) {
         os << "if (id == 0)" << CodeStream::OB(6);
         for(const auto &n : model.getNeuronGroups()) {
-            StandardGeneratedSections::neuronOutputInit(os, n.second, "dd_");
+            StandardGeneratedSections::neuronResetKernel(os, n.second, "dd_");
         }
         os << CodeStream::CB(6);
         os << "__threadfence();" << std::endl << std::endl;
