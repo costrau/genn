@@ -31,6 +31,7 @@
 #include "utils.h"
 #include "codeGenUtils.h"
 #include "codeStream.h"
+#include "synapticEventKernel/postParallelisedBitmask.h"
 #include "synapticEventKernel/postParallelisedDense.h"
 #include "synapticEventKernel/postParallelisedSparse.h"
 
@@ -664,6 +665,7 @@ int main(int argc,     //!< number of arguments; expected to be 2
     std::vector<std::unique_ptr<SynapticEventKernel::Base>> synapticEventKernels;
 #ifndef CPU_ONLY
     // Add synaptic event kernels to array
+    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedBitmask()));
     synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedDense()));
     synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedSparse()));
 
