@@ -134,22 +134,28 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                   const string &path,     //!< path the generated code will be deposited
                   std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
 {
-    enum Kernel{ KernelCalcSynapses, KernelLearnSynapsesPost,
-        KernelCalcSynapseDynamics, KernelCalcNeurons, KernelMax };
-    const char *kernelName[KernelMax]= {"calcSynapses", "learnSynapsesPost", "calcSynapseDynamics", "calcNeurons"};
+    enum Kernel{ KernelLearnSynapsesPost, KernelCalcSynapseDynamics, KernelCalcNeurons, KernelLastHardCoded};
+
+    const int KernelMax = KernelLastHardCoded + synapticEventKernels.size();
+
+    vector<string> kernelName = {"learnSynapsesPost", "calcSynapseDynamics", "calcNeurons"};
+    kernelName.reserve(KernelMax);
+    for(const auto &k : synapticEventKernels) {
+        kernelName.push_back(k->getKernelName());
+    }
+
     size_t globalMem, mostGlobalMem = 0;
     int chosenDevice = 0;
 
     // IF OPTIMISATION IS ON: Choose the device which supports the highest warp occupancy.
     if (GENN_PREFERENCES::optimiseBlockSize) {
         cout << "optimizing block size..." << endl;
-        int reqRegs, reqSmem, requiredBlocks;
-        int warpSize= 32;
+        int reqRegs, reqSmem;
 
         // initialise the smallXXX flags and bestBlkSz
-        vector<unsigned int> bestBlkSz[KernelMax];
-        vector<int> smallModel[KernelMax];
-        vector<int> deviceOccupancy[KernelMax];
+        vector<vector<unsigned int>> bestBlkSz(KernelMax);
+        vector<vector<int>> smallModel(KernelMax);
+        vector<vector<int>> deviceOccupancy(KernelMax);
         for (int kernel= 0; kernel < KernelMax; kernel++) {
             bestBlkSz[kernel].resize(deviceCount, 0);
             smallModel[kernel].resize(deviceCount, 0);
@@ -157,18 +163,11 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
         }
 
         // Get the sizes of each synapse / learn group present on this host and device
-        vector<unsigned int> groupSize[KernelMax];
+        vector<vector<unsigned int>> groupSize(KernelMax);
         for(const auto &s : model.getSynapseGroups()) {
             const unsigned int maxConnections = s.second.getMaxConnections();
             const unsigned int numSrcNeurons = s.second.getSrcNeuronGroup()->getNumNeurons();
             const unsigned int numTrgNeurons = s.second.getTrgNeuronGroup()->getNumNeurons();
-
-            if ((s.second.getMatrixType() & SynapseMatrixConnectivity::SPARSE) && maxConnections > 0) {
-                groupSize[KernelCalcSynapses].push_back(maxConnections);
-            }
-            else {
-                groupSize[KernelCalcSynapses].push_back(numTrgNeurons);
-            }
 
             if (model.isSynapseGroupPostLearningRequired(s.first)) {     // TODO: this needs updating where learning is detected properly!
                 groupSize[KernelLearnSynapsesPost].push_back(numSrcNeurons);
@@ -182,6 +181,11 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                     groupSize[KernelCalcSynapseDynamics].push_back(numSrcNeurons * numTrgNeurons);
                 }
             }
+        }
+
+        // Get the size of each synapse group simulated by each synaptic event kernel
+        for(unsigned int k = 0; k < synapticEventKernels.size(); k++) {
+            synapticEventKernels[k]->getNumThreads(groupSize[KernelLastHardCoded + k]);
         }
 
         // Populate the neuron group size
@@ -299,17 +303,27 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
             nvccCommand += " -o \"" + cubinPath + "\" \"" + runnerPath + "\"";
 #endif
 
-            cudaFuncAttributes krnlAttr[2][KernelMax];
-            CUfunction kern;
-            CUresult res;
-            bool KrnlExist[KernelMax];
+            constexpr int warpSize= 32;
+
+            // do two repititions with different candidate kernel size
+            std::vector<cudaFuncAttributes> krnlAttr[2];
+            std::vector<bool> KrnlExist(KernelMax);
             for (int rep= 0; rep < 2; rep++) {
-                // do two repititions with different candidate kernel size
-                synapseBlkSz = warpSize*(rep+1);
+                krnlAttr[rep].resize(KernelMax);
+
+                // Set candidate block size for each hard-coded kernel
                 learnBlkSz = warpSize*(rep+1);
                 synDynBlkSz= warpSize*(rep+1);
                 neuronBlkSz = warpSize*(rep+1);
                 model.setPopulationSums();
+
+                // Set candidate block size for each synaptic event kernel
+                const int synapseBlkSz = warpSize*(rep+1);
+                for(auto &k : synapticEventKernels) {
+                    k->setBlockSize(synapseBlkSz);
+                }
+
+                // Generate code
                 generate_model_runner(model, path, synapticEventKernels);
 
                 // Run NVCC
@@ -322,12 +336,14 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
 #ifdef BLOCKSZ_DEBUG
                     cerr << "BLOCKSZ_DEBUG: ptxas info for " << kernelName[i] << " ..." << endl;
 #endif
-                    res= cuModuleGetFunction(&kern, module, kernelName[i]);
+                    CUfunction kern;
+                    CUresult res= cuModuleGetFunction(&kern, module, kernelName[i].c_str());
                     if (res == CUDA_SUCCESS) {
                         cudaFuncGetAttributesDriver(&krnlAttr[rep][i], kern);
                         KrnlExist[i]= true;
                     }
                     else {
+                        assert(false);
                         KrnlExist[i]= false;
                     }
                 }
@@ -400,10 +416,11 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                         if (blockLimit < mainBlockLimit) mainBlockLimit= blockLimit;
 
                         // The number of thread blocks required to simulate all groups
-                        requiredBlocks = 0;
-                        for (size_t group = 0; group < groupSize[kernel].size(); group++) {
-                            requiredBlocks+= ceil(((float) groupSize[kernel][group])/(blkSz*warpSize));
-                        }
+                        const int requiredBlocks = std::accumulate(groupSize[kernel].cbegin(), groupSize[kernel].cend(), 0,
+                                                                   [blkSz, warpSize](int a, unsigned int grpSize)
+                                                                   {
+                                                                       return a + ceil(((float)grpSize)/(blkSz*warpSize));
+                                                                   });
 #ifdef BLOCKSZ_DEBUG
                         cerr << "BLOCKSZ_DEBUG: Kernel " << kernel;
                         cerr << ": Required blocks (according to padded sum): " << requiredBlocks << endl;
@@ -453,10 +470,6 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
             int bestDeviceOccupancy = 0;
 
             for (theDevice = 0; theDevice < deviceCount; theDevice++) {
-                if (!(GENN_PREFERENCES::autoChooseDevice) && (theDevice != GENN_PREFERENCES::defaultDevice)) {
-                    continue;
-                }
-
                 for (int kernel= 0; kernel < KernelMax; kernel++) {
 #ifdef BLOCKSZ_DEBUG
                     cerr << "BLOCKSZ_DEBUG: smallModel[" << kernel << "][" << theDevice << "]= ";
@@ -537,19 +550,28 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
         else {
             chosenDevice= GENN_PREFERENCES::defaultDevice;
         }
-        synapseBlkSz = bestBlkSz[KernelCalcSynapses][chosenDevice];
         learnBlkSz = bestBlkSz[KernelLearnSynapsesPost][chosenDevice];
         synDynBlkSz= bestBlkSz[KernelCalcSynapseDynamics][chosenDevice];
         neuronBlkSz = bestBlkSz[KernelCalcNeurons][chosenDevice];
+
+        for(unsigned int k = 0; k < synapticEventKernels.size(); k++) {
+            std::cout << "Synaptic event kernel '" << synapticEventKernels[k]->getKernelName() << "' - block size:" << bestBlkSz[KernelLastHardCoded + k][chosenDevice] << std::endl;
+            synapticEventKernels[k]->setBlockSize(bestBlkSz[KernelLastHardCoded + k][chosenDevice]);
+        }
     }
 
     // IF OPTIMISATION IS OFF: Simply choose the device with the most global memory.
     else {
         cout << "skipping block size optimisation..." << endl;
-        synapseBlkSz= GENN_PREFERENCES::synapseBlockSize;
         learnBlkSz= GENN_PREFERENCES::learningBlockSize;
         synDynBlkSz= GENN_PREFERENCES::synapseDynamicsBlockSize;
         neuronBlkSz= GENN_PREFERENCES::neuronBlockSize;
+
+        // Set all synapse event kernels to use user-specified block size
+        for(auto &k : synapticEventKernels) {
+            k->setBlockSize(GENN_PREFERENCES::synapseBlockSize);
+        }
+
         if (GENN_PREFERENCES::autoChooseDevice) {
             for (theDevice = 0; theDevice < deviceCount; theDevice++) {
                 CHECK_CUDA_ERRORS(cudaSetDevice(theDevice));
@@ -579,7 +601,9 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
     sm_os << deviceProp[chosenDevice].major << deviceProp[chosenDevice].minor << endl;
     sm_os.close();
 
-    cout << "synapse block size: " << synapseBlkSz << endl;
+    for(const auto &k : synapticEventKernels) {
+        cout << "synapse kernel '" << k->getKernelName() << "' block size:" << k->getBlockSize() << endl;
+    }
     cout << "learn block size: " << learnBlkSz << endl;
     cout << "synapseDynamics block size: " << synDynBlkSz << endl;
     cout << "neuron block size: " << neuronBlkSz << endl;

@@ -134,9 +134,9 @@ void SynapticEventKernel::PostParallelisedDense::generateKernel(CodeStream &os, 
     }
 }
 //----------------------------------------------------------------------------
-unsigned int SynapticEventKernel::PostParallelisedDense::getPaddedSize(const SynapseGroup &sg) const
+unsigned int SynapticEventKernel::PostParallelisedDense::getNumThreads(const SynapseGroup &sg) const
 {
-    return (unsigned int)(ceil((double)sg.getTrgNeuronGroup()->getNumNeurons() / (double)getBlockSize()) * (double)getBlockSize());
+    return sg.getTrgNeuronGroup()->getNumNeurons();
 }
 //----------------------------------------------------------------------------
 void SynapticEventKernel::PostParallelisedDense::generateInnerLoop(

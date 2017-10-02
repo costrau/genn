@@ -149,9 +149,9 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
     }
 }
 //----------------------------------------------------------------------------
-unsigned int SynapticEventKernel::PostParallelisedSparse::getPaddedSize(const SynapseGroup &sg) const
+unsigned int SynapticEventKernel::PostParallelisedSparse::getNumThreads(const SynapseGroup &sg) const
 {
-    return (unsigned int)(ceil((double)sg.getMaxConnections() / (double)getBlockSize()) * (double)getBlockSize());
+    return sg.getMaxConnections();
 }
 //----------------------------------------------------------------------------
 void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(

@@ -33,8 +33,8 @@ protected:
     // Declared virtuals
     //------------------------------------------------------------------------
     //!< Determine how many threads this synapse group
-    //!< requires, taking into account block size etc
-    virtual unsigned int getPaddedSize(const SynapseGroup &sg) const override;
+    //!< requires, not taking into account block size etc
+    virtual unsigned int getNumThreads(const SynapseGroup &sg) const override;
 
 private:
     //------------------------------------------------------------------------

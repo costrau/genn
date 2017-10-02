@@ -32,8 +32,8 @@ namespace GENN_FLAGS {
 };
 
 namespace GENN_PREFERENCES {    
-    int optimiseBlockSize = 1; //!< Flag for signalling whether or not block size optimisation should be performed
-    int autoChooseDevice= 1; //!< Flag to signal whether the GPU device should be chosen automatically 
+    bool optimiseBlockSize = true; //!< Flag for signalling whether or not block size optimisation should be performed
+    bool autoChooseDevice= true; //!< Flag to signal whether the GPU device should be chosen automatically
     bool optimizeCode = false; //!< Request speed-optimized code, at the expense of floating-point accuracy
     bool debugCode = false; //!< Request debug data to be embedded in the generated code
     bool showPtxInfo = false; //!< Request that PTX assembler information be displayed for each CUDA kernel during compilation
@@ -51,7 +51,6 @@ namespace GENN_PREFERENCES {
 
 // These will eventually go inside e.g. some HardwareConfig class. Putting them here meanwhile.
 unsigned int neuronBlkSz; //!< Global variable containing the GPU block size for the neuron kernel
-unsigned int synapseBlkSz; //!< Global variable containing the GPU block size for the synapse kernel
 unsigned int learnBlkSz; //!< Global variable containing the GPU block size for the learn kernel
 unsigned int synDynBlkSz; //!< Global variable containing the GPU block size for the synapse dynamics kernel
 //vector<cudaDeviceProp> deviceProp; //!< Global vector containing the properties of all CUDA-enabled devices

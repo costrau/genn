@@ -50,6 +50,9 @@ public:
     //!< Add a synapse group to be generated with this event kernel generator
     void addSynapseGroup(SynapseGroupIter sg);
 
+    //!< Gets number of threads each synapse group this kernel is used to simulate will require
+    void getNumThreads(std::vector<unsigned int> &groupSizes) const;
+
     //!< Is this kernel in use
     bool isUsed() const{ return !m_Grid.empty(); }
 
@@ -64,7 +67,7 @@ public:
     unsigned int getBlockSize() const{ return m_BlockSize; }
 
     //!< Get total size of grid
-    unsigned int getGridSize() const{ return std::get<2>(m_Grid.back()); }
+    unsigned int getGridSize() const;
 
     // Get number of blocks that make up grid
     unsigned int getNumBlocks() const{ return getGridSize() / getBlockSize(); }
@@ -74,14 +77,18 @@ protected:
     // Declared virtuals
     //------------------------------------------------------------------------
     //!< Determine how many threads this synapse group
-    //!< requires, taking into account block size etc
-    virtual unsigned int getPaddedSize(const SynapseGroup &sg) const = 0;
+    //!< requires, not taking into account block size etc
+    virtual unsigned int getNumThreads(const SynapseGroup &sg) const = 0;
 
     //------------------------------------------------------------------------
     // Protected API
     //------------------------------------------------------------------------
     //!< Write kernel function declaration to code stream
     void writeKernelDeclaration(CodeStream &os, const std::string &ftype) const;
+
+    //!< Determine how many threads this synapse group
+    //!< requires, taking into account block size etc
+    unsigned int getPaddedSize(const SynapseGroup &sg) const;
 
     //!< Gets grid to simulate in this kernel
     const std::vector<GridEntry> &getGrid() const{ return m_Grid; }

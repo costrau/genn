@@ -15,6 +15,17 @@ void SynapticEventKernel::Base::addSynapseGroup(SynapseGroupIter sg)
     sg->second.addExtraGlobalSynapseParams(m_ExtraGlobalParameters);
 }
 //------------------------------------------------------------------------
+void SynapticEventKernel::Base::getNumThreads(std::vector<unsigned int> &groupSizes) const
+{
+    // Reserve group sizes
+    groupSizes.reserve(m_Grid.size());
+
+    // Loop through grid and add number of threads
+    for(const auto &s : m_Grid) {
+        groupSizes.push_back(getNumThreads(std::get<0>(s)->second));
+    }
+}
+//------------------------------------------------------------------------
 void SynapticEventKernel::Base::setBlockSize(unsigned int blockSize)
 {
     // Set block size
@@ -31,6 +42,16 @@ void SynapticEventKernel::Base::setBlockSize(unsigned int blockSize)
 
         // Update end index of this synapse in grid
         std::get<2>(s) = idStart;
+    }
+}
+//------------------------------------------------------------------------
+unsigned int SynapticEventKernel::Base::getGridSize() const
+{
+    if(m_Grid.empty()) {
+        return 0;
+    }
+    else {
+        return std::get<2>(m_Grid.back());
     }
 }
 //------------------------------------------------------------------------
@@ -61,6 +82,11 @@ void SynapticEventKernel::Base::writeKernelCall(CodeStream &os, bool timingEnabl
         os << "cudaEventRecord(synapseStop);" << std::endl;
     }
     os << CodeStream::CB(1131) << std::endl;
+}
+//----------------------------------------------------------------------------
+unsigned int SynapticEventKernel::Base::getPaddedSize(const SynapseGroup &sg) const
+{
+    return (unsigned int)(ceil((double)getNumThreads(sg) / (double)getBlockSize()) * (double)getBlockSize());
 }
 //------------------------------------------------------------------------
 void SynapticEventKernel::Base::writeKernelDeclaration(CodeStream &os, const std::string &ftype) const
