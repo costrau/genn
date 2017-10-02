@@ -343,7 +343,6 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                         KrnlExist[i]= true;
                     }
                     else {
-                        assert(false);
                         KrnlExist[i]= false;
                     }
                 }
@@ -555,7 +554,6 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
         neuronBlkSz = bestBlkSz[KernelCalcNeurons][chosenDevice];
 
         for(unsigned int k = 0; k < synapticEventKernels.size(); k++) {
-            std::cout << "Synaptic event kernel '" << synapticEventKernels[k]->getKernelName() << "' - block size:" << bestBlkSz[KernelLastHardCoded + k][chosenDevice] << std::endl;
             synapticEventKernels[k]->setBlockSize(bestBlkSz[KernelLastHardCoded + k][chosenDevice]);
         }
     }
@@ -602,7 +600,9 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
     sm_os.close();
 
     for(const auto &k : synapticEventKernels) {
-        cout << "synapse kernel '" << k->getKernelName() << "' block size:" << k->getBlockSize() << endl;
+        if(k->isUsed()) {
+            cout << "synapse kernel '" << k->getKernelName() << "' block size:" << k->getBlockSize() << endl;
+        }
     }
     cout << "learn block size: " << learnBlkSz << endl;
     cout << "synapseDynamics block size: " << synDynBlkSz << endl;

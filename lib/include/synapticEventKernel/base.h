@@ -63,14 +63,14 @@ public:
     //!< Set block size and re-evaluate grid based on new block size
     void setBlockSize(unsigned int blockSize);
 
-    //!< Gets current block size
+    //!< Get  size of each thread block
     unsigned int getBlockSize() const{ return m_BlockSize; }
 
-    //!< Get total size of grid
-    unsigned int getGridSize() const;
+    //!< Get total size of grid in terms of threads
+    unsigned int getGridSizeThreads() const;
 
-    // Get number of blocks that make up grid
-    unsigned int getNumBlocks() const{ return getGridSize() / getBlockSize(); }
+    //!< Get total size of grid in terms of blocks
+    unsigned int getGridSizeBlocks() const;
 
 protected:
     //------------------------------------------------------------------------

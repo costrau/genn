@@ -147,6 +147,9 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
         os << CodeStream::CB(77);
         os << std::endl;
     }
+
+    // synapse kernel code
+    os << CodeStream::CB(75);
 }
 //----------------------------------------------------------------------------
 unsigned int SynapticEventKernel::PostParallelisedSparse::getNumThreads(const SynapseGroup &sg) const

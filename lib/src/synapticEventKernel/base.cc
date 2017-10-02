@@ -45,7 +45,7 @@ void SynapticEventKernel::Base::setBlockSize(unsigned int blockSize)
     }
 }
 //------------------------------------------------------------------------
-unsigned int SynapticEventKernel::Base::getGridSize() const
+unsigned int SynapticEventKernel::Base::getGridSizeThreads() const
 {
     if(m_Grid.empty()) {
         return 0;
@@ -55,15 +55,26 @@ unsigned int SynapticEventKernel::Base::getGridSize() const
     }
 }
 //------------------------------------------------------------------------
+unsigned int SynapticEventKernel::Base::getGridSizeBlocks() const
+{
+    const unsigned int gridSizeThreads = getGridSizeThreads();
+    if(gridSizeThreads == 0) {
+        return 0;
+    }
+    else {
+        return ceil((float)gridSizeThreads / getBlockSize());
+    }
+}
+//------------------------------------------------------------------------
 void SynapticEventKernel::Base::writeKernelCall(CodeStream &os, bool timingEnabled) const
 {
-    const unsigned int gridSize = getGridSize();
-    os << "// " << getKernelName() << " grid size = " << gridSize << std::endl;
+    const unsigned int gridSizeBlocks = getGridSizeBlocks();
+    os << "// " << getKernelName() << " grid size = " << gridSizeBlocks << std::endl;
     os << CodeStream::OB(1131) << std::endl;
 
     // Declare threads and grid
     os << "dim3 sThreads(" << getBlockSize() << ", 1);" << std::endl;
-    os << "dim3 sGrid(" << gridSize << ", 1);" << std::endl;
+    os << "dim3 sGrid(" << gridSizeBlocks << ", 1);" << std::endl;
 
     // Write code to record kernel start time
     if(timingEnabled) {

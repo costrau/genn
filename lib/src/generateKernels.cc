@@ -1282,7 +1282,7 @@ void genSynapseKernel(const NNmodel &model, //!< Model description
                                                             (unsigned int)0,
                                                             [](unsigned int a, const std::unique_ptr<SynapticEventKernel::Base> &s)
                                                             {
-                                                                return (a + s->getNumBlocks());
+                                                                return (a + s->getGridSizeBlocks());
                                                             });
     // Loop through synaptic event kernels and generate code for those in use
     for(const auto &s : synapticEventKernels) {
