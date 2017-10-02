@@ -40,7 +40,7 @@ private:
     //------------------------------------------------------------------------
     // Private API
     //------------------------------------------------------------------------
-    void generateInnerLoop(CodeStream &os, const SynapseGroup &sg,
+    void generateInnerLoop(CodeStream &os, const SynapseGroup &sg, bool useSharedMemory,
                            const string &postfix, const string &ftype) const;
 };
 }   // namespace SynapticEventKernel

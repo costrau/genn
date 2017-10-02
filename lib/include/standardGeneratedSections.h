@@ -45,7 +45,15 @@ void neuronSpikeEventTest(
     const std::string &localID,
     const std::string &ftype);
 
-void resetKernel(
+void synapseReadDelaySlot(
+    CodeStream &os,
+    const SynapseGroup &sg);
+
+void synapseReadEventBlockCount(
+    CodeStream &os, unsigned int blockSize,
+    const SynapseGroup &sg);
+
+void synapseResetKernel(
     CodeStream &os, unsigned int numBlocks,
     const std::map<std::string, NeuronGroup> &ngs);
 }   // namespace StandardGeneratedSections

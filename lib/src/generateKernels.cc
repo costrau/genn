@@ -632,35 +632,7 @@ void genSynapsePostLearn(const NNmodel &model, //!< Model description
         os << CodeStream::CB(250);
         os << CodeStream::CB(230);
         if (model.getResetKernel() == GENN_FLAGS::learnSynapsesPost) {
-            os << "__syncthreads();" << std::endl;
-            os << "if (threadIdx.x == 0)" << CodeStream::OB(320);
-            os << "j = atomicAdd((unsigned int *) &d_done, 1);" << std::endl;
-            os << "if (j == " << numPostLearnBlocks - 1 << ")" << CodeStream::OB(330);
-
-            for(const auto &n : model.getNeuronGroups()) {
-                if (n.second.isDelayRequired()) { // WITH DELAY
-                    os << "dd_spkQuePtr" << n.first << " = (dd_spkQuePtr" << n.first << " + 1) % " << n.second.getNumDelaySlots() << ";" << std::endl;
-                    if (n.second.isSpikeEventRequired()) {
-                        os << "dd_glbSpkCntEvnt" << n.first << "[dd_spkQuePtr" << n.first << "] = 0;" << std::endl;
-                    }
-                    if (n.second.isTrueSpikeRequired()) {
-                        os << "dd_glbSpkCnt" << n.first << "[dd_spkQuePtr" << n.first << "] = 0;" << std::endl;
-                    }
-                    else {
-                        os << "dd_glbSpkCnt" << n.first << "[0] = 0;" << std::endl;
-                    }
-                }
-                else { // NO DELAY
-                    if (n.second.isSpikeEventRequired()) {
-                        os << "dd_glbSpkCntEvnt" << n.first << "[0] = 0;" << std::endl;
-                    }
-                    os << "dd_glbSpkCnt" << n.first << "[0] = 0;" << std::endl;
-                }
-            }
-            os << "d_done = 0;" << std::endl;
-
-            os << CodeStream::CB(330); // end "if (j == " << numOfBlocks - 1 << ")"
-            os << CodeStream::CB(320); // end "if (threadIdx.x == 0)"
+            StandardGeneratedSections::synapseResetKernel(os, numPostLearnBlocks, model.getNeuronGroups());
         }
         os << CodeStream::CB(220);
     }

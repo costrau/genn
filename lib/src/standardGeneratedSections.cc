@@ -106,7 +106,45 @@ void StandardGeneratedSections::neuronSpikeEventTest(
     }
 }
 //----------------------------------------------------------------------------
-void StandardGeneratedSections::resetKernel(
+void StandardGeneratedSections::synapseReadDelaySlot(CodeStream &os,
+                                                     const SynapseGroup &sg)
+{
+    if (sg.getSrcNeuronGroup()->isDelayRequired()) {
+        os << "const unsigned int delaySlot = (dd_spkQuePtr" << sg.getSrcNeuronGroup()->getName();
+        os << " + " << (sg.getSrcNeuronGroup()->getNumDelaySlots() - sg.getDelaySteps());
+        os << ") % " << sg.getSrcNeuronGroup()->getNumDelaySlots() << ";" << std::endl;
+    }
+}
+//----------------------------------------------------------------------------
+void StandardGeneratedSections::synapseReadEventBlockCount(CodeStream &os, unsigned int blockSize,
+                                                           const SynapseGroup &sg)
+{
+    // If spike-like events are processed, extract spike count
+    if (sg.isSpikeEventRequired()) {
+        os << "const unsigned int lscntEvnt = dd_glbSpkCntEvnt" << sg.getSrcNeuronGroup()->getName();
+        if (sg.getSrcNeuronGroup()->isDelayRequired()) {
+            os << "[delaySlot];" << std::endl;
+        }
+        else {
+            os << "[0];" << std::endl;
+        }
+        os << "const unsigned int numSpikeSubsetsEvnt = (lscntEvnt+" << blockSize << "-1) / " << blockSize << ";" << std::endl;
+    }
+
+    // If true spikes are processed, extract spike count
+    if (sg.isTrueSpikeRequired()) {
+        os << "const unsigned int lscnt = dd_glbSpkCnt" << sg.getSrcNeuronGroup()->getName();
+        if (sg.getSrcNeuronGroup()->isDelayRequired()) {
+            os << "[delaySlot];" << std::endl;
+        }
+        else {
+            os << "[0];" << std::endl;
+        }
+        os << "const unsigned int numSpikeSubsets = (lscnt+" << blockSize << "-1) / " << blockSize << ";" << std::endl;
+    }
+}
+//----------------------------------------------------------------------------
+void StandardGeneratedSections::synapseResetKernel(
     CodeStream &os, unsigned int numBlocks,
     const std::map<std::string, NeuronGroup> &ngs)
 {
