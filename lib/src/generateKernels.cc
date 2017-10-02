@@ -1256,7 +1256,6 @@ void genSynapseKernel(const NNmodel &model, //!< Model description
     // compiler/include control (include once)
     os << "#ifndef _" << model.getName() << "_synapseKrnl_cc" << std::endl;
     os << "#define _" << model.getName() << "_synapseKrnl_cc" << std::endl;
-    os << "#define BLOCKSZ_SYN " << synapseBlkSz << std::endl;
     os << std::endl;
  
     // write doxygen comment

@@ -42,7 +42,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
     os << CodeStream::OB(75);
 
     // Global variables
-    os << "unsigned int id = BLOCKSZ_SYN * blockIdx.x + threadIdx.x;" << std::endl;
+    os << "unsigned int id = " << getBlockSize() << " * blockIdx.x + threadIdx.x;" << std::endl;
     os << "unsigned int lmax, j, r;" << std::endl;
     os << "unsigned int ipost;" << std::endl;
     os << ftype << " addtoinSyn;" << std::endl;
@@ -54,7 +54,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
         [this](const GridEntry &g){ return std::get<0>(g)->second.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize(); }))
     {
         os << ftype << " linSyn;" << std::endl;
-        os << "volatile __shared__ " << ftype << " shLg[BLOCKSZ_SYN];" << std::endl;
+        os << "volatile __shared__ " << ftype << " shLg[" << getBlockSize() << "];" << std::endl;
     }
 
     // Do any of the synapse groups process true spikes
@@ -65,10 +65,10 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
         if(std::any_of(getGrid().cbegin(), getGrid().cend(),
            [](const GridEntry &g){ return std::get<0>(g)->second.isTrueSpikeRequired() && std::get<0>(g)->second.arePreVarsRequiredForTrueSpike(); }))
         {
-            os << "__shared__ unsigned int shSpk[BLOCKSZ_SYN];" << std::endl;
+            os << "__shared__ unsigned int shSpk[" << getBlockSize() << "];" << std::endl;
         }
-        os << "__shared__ unsigned int shSpkPrePos[BLOCKSZ_SYN];" << std::endl;
-        os << "__shared__ unsigned int shSpkNPost[BLOCKSZ_SYN];" << std::endl;
+        os << "__shared__ unsigned int shSpkPrePos[" << getBlockSize() << "];" << std::endl;
+        os << "__shared__ unsigned int shSpkNPost[" << getBlockSize() << "];" << std::endl;
 
         os << "unsigned int lscnt, numSpikeSubsets;" << std::endl;
     }
@@ -81,10 +81,10 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
         if(std::any_of(getGrid().cbegin(), getGrid().cend(),
            [](const GridEntry &g){ return std::get<0>(g)->second.isSpikeEventRequired() && std::get<0>(g)->second.arePreVarsRequiredForSpikeLikeEvent(); }))
         {
-            os << "__shared__ unsigned int shSpkEvnt[BLOCKSZ_SYN];" << std::endl;
+            os << "__shared__ unsigned int shSpkEvnt[" << getBlockSize() << "];" << std::endl;
         }
-        os << "__shared__ unsigned int shSpkEvntPrePos[BLOCKSZ_SYN];" << std::endl;
-        os << "__shared__ unsigned int shSpkEvntNPost[BLOCKSZ_SYN];" << std::endl;
+        os << "__shared__ unsigned int shSpkEvntPrePos[" << getBlockSize() << "];" << std::endl;
+        os << "__shared__ unsigned int shSpkEvntNPost[" << getBlockSize() << "];" << std::endl;
 
         os << "unsigned int lscntEvnt, numSpikeSubsetsEvnt;" << std::endl;
     }
@@ -113,7 +113,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
             else {
                 os << "[0];" << std::endl;
             }
-            os << "numSpikeSubsetsEvnt = (lscntEvnt+BLOCKSZ_SYN-1) / BLOCKSZ_SYN;" << std::endl;
+            os << "numSpikeSubsetsEvnt = (lscntEvnt+" << getBlockSize() << "-1) / " << getBlockSize() << ";" << std::endl;
         }
 
         // If true spikes are processed, extract spike count
@@ -125,7 +125,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
             else {
                 os << "[0];" << std::endl;
             }
-            os << "numSpikeSubsets = (lscnt+BLOCKSZ_SYN-1) / BLOCKSZ_SYN;" << std::endl;
+            os << "numSpikeSubsets = (lscnt+" << getBlockSize() << "-1) / " << getBlockSize() << ";" << std::endl;
         }
 
         // generate the code for processing spike-like events
@@ -171,12 +171,12 @@ void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
 
     os << "// process presynaptic events: " << (evnt ? "Spike type events" : "True Spikes") << std::endl;
     os << "for (r = 0; r < numSpikeSubsets" << postfix << "; r++)" << CodeStream::OB(90);
-    os << "if (r == numSpikeSubsets" << postfix << " - 1) lmax = ((lscnt" << postfix << "-1) % BLOCKSZ_SYN) +1;" << std::endl;
-    os << "else lmax = BLOCKSZ_SYN;" << std::endl;
+    os << "if (r == numSpikeSubsets" << postfix << " - 1) lmax = ((lscnt" << postfix << "-1) % " << getBlockSize() << ") +1;" << std::endl;
+    os << "else lmax = " << getBlockSize() << ";" << std::endl;
     os << "__syncthreads();" << std::endl;
 
     os << "if (threadIdx.x < lmax)" << CodeStream::OB(100);
-    os << "j = dd_glbSpk" << postfix << sg.getSrcNeuronGroup()->getName() << "[" << sg.getOffsetPre() << "(r * BLOCKSZ_SYN) + threadIdx.x];" << std::endl;
+    os << "j = dd_glbSpk" << postfix << sg.getSrcNeuronGroup()->getName() << "[" << sg.getOffsetPre() << "(r * " << getBlockSize() << ") + threadIdx.x];" << std::endl;
 
     // If we need indices for presynaptic variables, copy spike ID into shared memory
     if(evnt ? sg.arePreVarsRequiredForSpikeLikeEvent() : sg.arePreVarsRequiredForTrueSpike()) {
