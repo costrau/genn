@@ -46,6 +46,6 @@ void neuronSpikeEventTest(
     const std::string &ftype);
 
 void resetKernel(
-    CodeStream &os,
+    CodeStream &os, unsigned int numBlocks,
     const std::map<std::string, NeuronGroup> &ngs);
 }   // namespace StandardGeneratedSections

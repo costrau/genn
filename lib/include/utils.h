@@ -98,6 +98,9 @@ class CodeStream;
 //--------------------------------------------------------------------------
 
 CUresult cudaFuncGetAttributesDriver(cudaFuncAttributes *attr, CUfunction kern);
+
+string getFloatAtomicAdd(const string &ftype);
+
 #endif
 
 

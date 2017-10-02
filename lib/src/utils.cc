@@ -31,6 +31,7 @@
 
 // GeNN includes
 #include "codeStream.h"
+#include "global.h"
 
 #ifndef CPU_ONLY
 //--------------------------------------------------------------------------
@@ -77,7 +78,21 @@ CUresult cudaFuncGetAttributesDriver(cudaFuncAttributes *attr, CUfunction kern) 
     attr->binaryVersion= tmp;
     return CUDA_SUCCESS;
 }
-#endif
+
+string getFloatAtomicAdd(const string &ftype)
+{
+    int version;
+    cudaRuntimeGetVersion(&version);
+    if (((deviceProp[theDevice].major < 2) && (ftype == "float"))
+        || (((deviceProp[theDevice].major < 6) || (version < 8000)) && (ftype == "double"))) {
+        return "atomicAddSW";
+    }
+    else {
+        return "atomicAdd";
+    }
+}
+
+#endif  // CPU_ONLY
 
 
 //--------------------------------------------------------------------------

@@ -20,10 +20,16 @@
 */
 //--------------------------------------------------------------------------
 
-#include "modelSpec.h"
-
-#include <string>
+// Standard C++ includes
 #include <fstream>
+#include <memory>
+#include <string>
+
+// GeNN includes
+#include "synapticEventKernel/base.h"
+
+// Forward declarations
+class NNmodel;
 
 using namespace std;
 
@@ -59,8 +65,8 @@ void genSupportCode(const NNmodel &model, //!< Model description
 
 #ifndef CPU_ONLY
 void genRunnerGPU(const NNmodel &model, //!< Model description
-                  const string &path //!< Path for code generation
-                  );
+                  const string &path, //!< Path for code generation
+                  const std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels);
 #endif // CPU_ONLY
 
 

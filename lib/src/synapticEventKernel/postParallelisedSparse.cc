@@ -1,7 +1,14 @@
 #include "synapticEventKernel/postParallelisedSparse.h"
 
+// Standard C++ includes
+#include <algorithm>
+
 // GeNN includes
+#include "codeStream.h"
+#include "standardGeneratedSections.h"
 #include "standardSubstitutions.h"
+#include "synapseMatrixType.h"
+#include "utils.h"
 
 //----------------------------------------------------------------------------
 // SynapticEventKernel::PostParallelisedSparse
@@ -15,7 +22,7 @@ int SynapticEventKernel::PostParallelisedSparse::getCompatibility(const SynapseG
     }
 
     // Not compatible with non-sparse matrices
-    if(!(sg.getMatrixType() & SPARSE)) {
+    if(!(sg.getMatrixType() & SynapseMatrixConnectivity::SPARSE)) {
         return -1;
     }
 
@@ -23,14 +30,13 @@ int SynapticEventKernel::PostParallelisedSparse::getCompatibility(const SynapseG
     return 1;
 }
 //----------------------------------------------------------------------------
-void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os, bool isResetKernel) const override
+void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os, bool isResetKernel,
+                                                                 unsigned int totalSynapseBlocks,
+                                                                 const std::map<std::string, NeuronGroup> &ngs,
+                                                                 const std::string &ftype) const
 {
-    // count how many neuron blocks to use: one thread for each synapse target
-    // targets of several input groups are counted multiply
-    const unsigned int numSynapseBlocks = model.getSynapseKernelGridSize() / synapseBlkSz;
-
     // synapse kernel header
-    writeKernelDeclaration(os, model.getPrecision());
+    writeKernelDeclaration(os, ftype);
 
     // synapse kernel code
     os << CodeStream::OB(75);
@@ -39,25 +45,25 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
     os << "unsigned int id = BLOCKSZ_SYN * blockIdx.x + threadIdx.x;" << std::endl;
     os << "unsigned int lmax, j, r;" << std::endl;
     os << "unsigned int ipost;" << std::endl;
-    os << model.getPrecision() << " addtoinSyn;" << std::endl;
+    os << ftype << " addtoinSyn;" << std::endl;
     os << "unsigned int prePos; " << std::endl;
     os << "unsigned int npost; " << std::endl;
 
     // If any of the synapse groups are small enough, declare shared memory array to sum per-neuron outputs
-    if(std::any_of(synapseGroups.cbegin(), SynapseGroups.cend(),
-        [this](const SynapseGroupIter &s){ return s.second.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize(); }))
+    if(std::any_of(getGrid().cbegin(), getGrid().cend(),
+        [this](const GridEntry &g){ return std::get<0>(g)->second.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize(); }))
     {
-        os << model.getPrecision() << " linSyn;" << std::endl;
-        os << "volatile __shared__ " << model.getPrecision() << " shLg[BLOCKSZ_SYN];" << std::endl;
+        os << ftype << " linSyn;" << std::endl;
+        os << "volatile __shared__ " << ftype << " shLg[BLOCKSZ_SYN];" << std::endl;
     }
 
     // Do any of the synapse groups process true spikes
-    if(std::any_of(synapseGroups.cbegin(), synapseGroups.cend(),
-       [](const SynapseGroupIter &s){ return s.second.isTrueSpikeRequired(); }))
+    if(std::any_of(getGrid().cbegin(), getGrid().cend(),
+       [](const GridEntry &g){ return std::get<0>(g)->second.isTrueSpikeRequired(); }))
     {
         // If any of the true-spike processing synapse groups require indices for presynaptic variables
-        if(std::any_of(synapseGroups.cbegin(), synapseGroups.cend(),
-           [](const SynapseGroupIter &s){ return s.second.isTrueSpikeRequired() && s.second.arePreVarsRequiredForTrueSpike(); }))
+        if(std::any_of(getGrid().cbegin(), getGrid().cend(),
+           [](const GridEntry &g){ return std::get<0>(g)->second.isTrueSpikeRequired() && std::get<0>(g)->second.arePreVarsRequiredForTrueSpike(); }))
         {
             os << "__shared__ unsigned int shSpk[BLOCKSZ_SYN];" << std::endl;
         }
@@ -68,12 +74,12 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
     }
 
     // Do any of the synapse groups process spike-like events
-    if(std::any_of(synapseGroups.cbegin(), synapseGroups.cend(),
-       [](const SynapseGroupIter &s){ return s.second.isSpikeEventRequired(); }))
+    if(std::any_of(getGrid().cbegin(), getGrid().cend(),
+       [](const GridEntry &g){ return std::get<0>(g)->second.isSpikeEventRequired(); }))
     {
         // If any of the spike-like event processing synapse groups require indices for presynaptic variables
-        if(std::any_of(synapseGroups.cbegin(), synapseGroups.cend(),
-           [](const SynapseGroupIter &s){ return s.second.isSpikeEventRequired() && s.second.arePreVarsRequiredForSpikeLikeEvent(); }))
+        if(std::any_of(getGrid().cbegin(), getGrid().cend(),
+           [](const GridEntry &g){ return std::get<0>(g)->second.isSpikeEventRequired() && std::get<0>(g)->second.arePreVarsRequiredForSpikeLikeEvent(); }))
         {
             os << "__shared__ unsigned int shSpkEvnt[BLOCKSZ_SYN];" << std::endl;
         }
@@ -84,23 +90,24 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
     }
 
     // Loop through the synapse groups
-    for(const auto &s : synapseGroups) {
-        os << "// synapse group " << s.first << std::endl;
+    for(const auto &g : getGrid()) {
+        const SynapseGroup &sg = std::get<0>(g)->second;
 
-        const auto &groupIDRange = s.second.getPaddedKernelIDRange();
-        os << "if ((id >= " << groupIDRange.first << ") && (id < " << groupIDRange.second << "))" << CodeStream::OB(77);
-        os << "unsigned int lid = id - " << groupIDRange.first<< ";" << std::endl;
+        os << "// synapse group " << std::get<0>(g)->first << std::endl;
 
-        if (s.second.getSrcNeuronGroup()->isDelayRequired()) {
-            os << "unsigned int delaySlot = (dd_spkQuePtr" << s.second.getSrcNeuronGroup()->getName();
-            os << " + " << (s.second.getSrcNeuronGroup()->getNumDelaySlots() - s.second.getDelaySteps());
-            os << ") % " << s.second.getSrcNeuronGroup()->getNumDelaySlots() << ";" << std::endl;
+        os << "if ((id >= " << std::get<1>(g) << ") && (id < " << std::get<2>(g) << "))" << CodeStream::OB(77);
+        os << "const unsigned int lid = id - " << std::get<1>(g) << ";" << std::endl;
+
+        if (sg.getSrcNeuronGroup()->isDelayRequired()) {
+            os << "unsigned int delaySlot = (dd_spkQuePtr" << sg.getSrcNeuronGroup()->getName();
+            os << " + " << (sg.getSrcNeuronGroup()->getNumDelaySlots() - sg.getDelaySteps());
+            os << ") % " << sg.getSrcNeuronGroup()->getNumDelaySlots() << ";" << std::endl;
         }
 
         // If spike-like events are processed, extract spike count
-        if (s.second.isSpikeEventRequired()) {
-            os << "lscntEvnt = dd_glbSpkCntEvnt" << s.second.getSrcNeuronGroup()->getName();
-            if (s.second.getSrcNeuronGroup()->isDelayRequired()) {
+        if (sg.isSpikeEventRequired()) {
+            os << "lscntEvnt = dd_glbSpkCntEvnt" << sg.getSrcNeuronGroup()->getName();
+            if (sg.getSrcNeuronGroup()->isDelayRequired()) {
                 os << "[delaySlot];" << std::endl;
             }
             else {
@@ -110,9 +117,9 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
         }
 
         // If true spikes are processed, extract spike count
-        if (s.second.isTrueSpikeRequired()) {
-            os << "lscnt = dd_glbSpkCnt" << s.second.getSrcNeuronGroup()->getName();
-            if (s.second.getSrcNeuronGroup()->isDelayRequired()) {
+        if (sg.isTrueSpikeRequired()) {
+            os << "lscnt = dd_glbSpkCnt" << sg.getSrcNeuronGroup()->getName();
+            if (sg.getSrcNeuronGroup()->isDelayRequired()) {
                 os << "[delaySlot];" << std::endl;
             }
             else {
@@ -122,19 +129,19 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
         }
 
         // generate the code for processing spike-like events
-        if (s.second.isSpikeEventRequired()) {
-            generateInnerLoop(os, s.second, "Evnt", model.getPrecision());
+        if (sg.isSpikeEventRequired()) {
+            generateInnerLoop(os, sg, "Evnt", ftype);
         }
 
         // generate the code for processing true spike events
-        if (s.second.isTrueSpikeRequired()) {
-            generateInnerLoop(os, s.second, "", model.getPrecision());
+        if (sg.isTrueSpikeRequired()) {
+            generateInnerLoop(os, sg, "", ftype);
         }
         os << std::endl;
 
         // If this is the reset kernel, insert reset kernel
         if (isResetKernel) {
-           StandardGeneratedSections::resetKernel(os, model.getNeuronGroups());
+           StandardGeneratedSections::resetKernel(os, totalSynapseBlocks, ngs);
         }
 
         os << CodeStream::CB(77);
@@ -142,7 +149,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
     }
 }
 //----------------------------------------------------------------------------
-unsigned int SynapticEventKernel::PostParallelisedSparse::getPaddedSize(const SynapseGroup &sg)
+unsigned int SynapticEventKernel::PostParallelisedSparse::getPaddedSize(const SynapseGroup &sg) const
 {
     return (unsigned int)(ceil((double)sg.getMaxConnections() / (double)getBlockSize()) * (double)getBlockSize());
 }
@@ -151,10 +158,9 @@ void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
     CodeStream &os, //!< output stream for code
     const SynapseGroup &sg,
     const string &postfix, //!< whether to generate code for true spikes or spike type events
-    const string &ftype)
+    const string &ftype) const
 {
     const bool evnt = (postfix == "Evnt");
-    const int UIntSz = sizeof(unsigned int) * 8;
     const auto *wu = sg.getWUModel();
     const bool useSharedMemory = (sg.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize());
 
@@ -194,7 +200,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
     os << "// loop through all incoming spikes" << std::endl;
     os << "for (j = 0; j < lmax; j++)" << CodeStream::OB(110);
     os << "// only work on existing neurons" << std::endl;
-    os << "if (" << localID << " < " << sg.getMaxConnections() << ")" << CodeStream::OB(120);
+    os << "if (lid < " << sg.getMaxConnections() << ")" << CodeStream::OB(120);
 
     if (!wu->getSimSupportCode().empty()) {
         os << "using namespace " << sg.getName() << "_weightupdate_simCode;" << std::endl;
@@ -216,8 +222,8 @@ void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
     os << "prePos = shSpk" << postfix << "PrePos[j];" << std::endl;
     os << "npost = shSpk" << postfix << "NPost[j];" << std::endl;
 
-    os << "if (" << localID << " < npost)" << CodeStream::OB(140);
-    os << "prePos += " << localID << ";" << std::endl;
+    os << "if (lid < npost)" << CodeStream::OB(140);
+    os << "prePos += lid;" << std::endl;
     os << "ipost = dd_ind" << sg.getName() << "[prePos];" << std::endl;
 
 
@@ -257,8 +263,8 @@ void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
     if (useSharedMemory) {
         os << "__syncthreads();" << std::endl;
         os << "if (threadIdx.x < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(136); // need to write back results
-        os << "linSyn += shLg[" << localID << "];" << std::endl;
-        os << "shLg[" << localID << "] = 0;" << std::endl;
+        os << "linSyn += shLg[lid];" << std::endl;
+        os << "shLg[lid] = 0;" << std::endl;
         os << CodeStream::CB(136) << std::endl;
 
         os << "__syncthreads();" << std::endl;

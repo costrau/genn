@@ -695,6 +695,7 @@ void NNmodel::setPopulationSums()
     // SYNAPSE groups
     unsigned int paddedSynapseDynamicsIDStart = 0;
     unsigned int paddedSynapsePostLearnIDStart = 0;
+    for(auto &s : m_SynapseGroups) {
         if (!s.second.getWUModel()->getLearnPostCode().empty()) {
             const unsigned int startID = paddedSynapsePostLearnIDStart;
             paddedSynapsePostLearnIDStart += s.second.getPaddedPostLearnKernelSize(learnBlkSz);

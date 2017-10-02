@@ -19,10 +19,16 @@
 */
 //-------------------------------------------------------------------------
 
-#include "modelSpec.h"
-
-#include <string>
+// Standard C++ includes
 #include <fstream>
+#include <memory>
+#include <string>
+
+// GeNN includes
+#include "synapticEventKernel/base.h"
+
+// Forward declarations
+class NNmodel;
 
 using namespace std;
 
@@ -39,9 +45,9 @@ using namespace std;
 */
 //-------------------------------------------------------------------------
 
-void genNeuronKernel(const NNmodel &model, //!< Model description
-                     const string &path  //!< Path for code generation
-                     );
+void genNeuronKernel(const NNmodel &model,  //!< Model description
+                     const string &path);   //!< Path for code generation
+
 
 //-------------------------------------------------------------------------
 /*!
@@ -54,7 +60,7 @@ void genNeuronKernel(const NNmodel &model, //!< Model description
 //-------------------------------------------------------------------------
 
 void genSynapseKernel(const NNmodel &model, //!< Model description
-                      const string &path //!< Path for code generation
-                      );
+                      const string &path, //!< Path for code generation
+                      const std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels);
 
 #endif // CPU_ONLY

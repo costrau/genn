@@ -20,15 +20,18 @@
 //-------------------------------------------------------------------------
 
 #include "generateKernels.h"
+
+// Standard C++ includes
+#include <algorithm>
+
+// GeNN includes
+#include "codeGenUtils.h"
+#include "codeStream.h"
 #include "global.h"
+#include "modelSpec.h"
 #include "utils.h"
 #include "standardGeneratedSections.h"
 #include "standardSubstitutions.h"
-#include "codeGenUtils.h"
-#include "codeStream.h"
-
-#include <algorithm>
-
 
 // The CPU_ONLY version does not need any of this
 #ifndef CPU_ONLY
@@ -97,18 +100,6 @@ bool shouldSynapseGroupUseSharedSparse(const SynapseGroup &sg)
     }
 }*/
 
-string getFloatAtomicAdd(const string &ftype)
-{
-    int version;
-    cudaRuntimeGetVersion(&version);
-    if (((deviceProp[theDevice].major < 2) && (ftype == "float"))
-        || (((deviceProp[theDevice].major < 6) || (version < 8000)) && (ftype == "double"))) {
-        return "atomicAddSW";
-    }
-    else {
-        return "atomicAdd";
-    }
-}
 // parallelisation along pre-synaptic spikes, looped over post-synaptic neurons
 /*void generatePreParallelisedCode(
     CodeStream &os, //!< output stream for code
@@ -1285,11 +1276,20 @@ void genSynapseKernel(const NNmodel &model, //!< Model description
 
     ///////////////////////////////////////////////////////////////
     // Kernel for processing true spikes and spike-like events
-    // Loop through synaptic event kernels
+
+    // Determine whethere reset code should be inserted into synapse kernel and how many synapse blocks there are in totals
+    const bool isSynapseResetKernel = (model.getResetKernel() == GENN_FLAGS::calcSynapses);
+    const unsigned int totalSynapseBlocks = std::accumulate(synapticEventKernels.cbegin(), synapticEventKernels.cend(),
+                                                            (unsigned int)0,
+                                                            [](unsigned int a, const std::unique_ptr<SynapticEventKernel::Base> &s)
+                                                            {
+                                                                return (a + s->getNumBlocks());
+                                                            });
+    // Loop through synaptic event kernels and generate code for those in use
     for(const auto &s : synapticEventKernels) {
-        // If this kernel is in use, generate kernel function
         if(s->isUsed()) {
-            s->generateKernel(os, isResetKernel);
+            s->generateKernel(os, isSynapseResetKernel, totalSynapseBlocks,
+                              model.getNeuronGroups(), model.getPrecision());
         }
     }
 

@@ -38,6 +38,7 @@
 #include <cmath>
 #include <iterator>
 #include <memory>
+#include <vector>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -51,8 +52,8 @@
 //--------------------------------------------------------------------------
 
 void generate_model_runner(const NNmodel &model,  //!< Model description
-                           const string &path      //!< Path where the generated code will be deposited
-                           )
+                           const string &path,      //!< Path where the generated code will be deposited
+                           std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
 {
 #ifdef _WIN32
   _mkdir((path + "\\" + model.getName() + "_CODE").c_str());
@@ -67,14 +68,14 @@ void generate_model_runner(const NNmodel &model,  //!< Model description
 
 #ifndef CPU_ONLY
   // GPU specific code generation
-  genRunnerGPU(model, path);
+  genRunnerGPU(model, path, synapticEventKernels);
 
   // generate neuron kernels
   genNeuronKernel(model, path);
 
   // generate synapse and learning kernels
   if (!model.getSynapseGroups().empty()) {
-      genSynapseKernel(model, path);
+      genSynapseKernel(model, path, synapticEventKernels);
   }
 #endif
 
@@ -103,13 +104,13 @@ void generate_model_runner(const NNmodel &model,  //!< Model description
 void assignSynapticEventKernels(const NNmodel &model, std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
 {
     // Loop through synapse groups in model
-    for(const auto &s : model.getSynapseGroups()) {
+    for(auto s = model.getSynapseGroups().cbegin(); s != model.getSynapseGroups().cend(); ++s) {
         // Loop through possible synaptic event kernels
         SynapticEventKernel::Base *mostCompatibleKernel = nullptr;
         int highestCompatibility = std::numeric_limits<int>::min();
         for(auto &k : synapticEventKernels) {
             // If this kernel is more compatible than current best, update best
-            const int compatibility = k->getCompatibility(s.second);
+            const int compatibility = k->getCompatibility(s->second);
             if(compatibility > highestCompatibility) {
                 highestCompatibility = compatibility;
                 mostCompatibleKernel = k.get();
@@ -118,19 +119,20 @@ void assignSynapticEventKernels(const NNmodel &model, std::vector<std::unique_pt
 
         // If no compatible kernel was found, error
         if(mostCompatibleKernel == nullptr) {
-            gennError("No suitable synaptic event kernel found for synapse population:" + s.first);
+            gennError("No suitable synaptic event kernel found for synapse population:" + s->first);
             return;
         }
         // Otherwise, add synapse group to this kernel
         else {
+            std::cout << "Assigning synapse group '" << s->second.getName() << "' to synapse event kernel '" << mostCompatibleKernel->getKernelName() << "'" << std::endl;
             mostCompatibleKernel->addSynapseGroup(s);
         }
     }
 }
 
 void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
-                  const string &path     //!< path the generated code will be deposited
-    )
+                  const string &path,     //!< path the generated code will be deposited
+                  std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
 {
     enum Kernel{ KernelCalcSynapses, KernelLearnSynapsesPost,
         KernelCalcSynapseDynamics, KernelCalcNeurons, KernelMax };
@@ -308,7 +310,7 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                 synDynBlkSz= warpSize*(rep+1);
                 neuronBlkSz = warpSize*(rep+1);
                 model.setPopulationSums();
-                generate_model_runner(model, path);
+                generate_model_runner(model, path, synapticEventKernels);
 
                 // Run NVCC
                 cout << "dry-run compile for device " << theDevice << endl;
@@ -635,17 +637,16 @@ int main(int argc,     //!< number of arguments; expected to be 2
     }
 
     string path = argv[1];
+    std::vector<std::unique_ptr<SynapticEventKernel::Base>> synapticEventKernels;
 #ifndef CPU_ONLY
-    // Create array of possible synaptic event kernels
-    std::vector<std::unique_ptr<SynapticEventKernel::Base>> synapticEventKernels = {
-        std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedDense()),
-        std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedSparse()),
-    };
+    // Add synaptic event kernels to array
+    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedDense()));
+    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedSparse()));
 
     // Assign synapse populations to synaptic event kernels
     assignSynapticEventKernels(*model, synapticEventKernels);
 
-    chooseDevice(*model, path);
+    chooseDevice(*model, path, synapticEventKernels);
 #endif // CPU_ONLY
     generate_model_runner(*model, path, synapticEventKernels);
 

@@ -200,7 +200,7 @@ void genNeuronFunction(const NNmodel &model, //!< Model description
         os << CodeStream::OB(55);
 
         // increment spike queue pointer and reset spike count
-        StandardGeneratedSections::neuronOutputInit(os, n.second, "");
+        StandardGeneratedSections::neuronResetKernel(os, n.second, "");
 
         if (n.second.isVarQueueRequired() && n.second.isDelayRequired()) {
             os << "unsigned int delaySlot = (spkQuePtr" << n.first;

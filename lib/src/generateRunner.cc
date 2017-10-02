@@ -19,16 +19,21 @@
   and CPU space. Part of the code generation section.
 */
 //--------------------------------------------------------------------------
+// Standard C++ includes
+#include <algorithm>
+#include <memory>
 
-#include "generateRunner.h"
-#include "global.h"
-#include "utils.h"
+// Standard C includes
+#include <cfloat>
+#include <cstdint>
+
+// GeNN includes
 #include "codeGenUtils.h"
 #include "codeStream.h"
-
-#include <stdint.h>
-#include <algorithm>
-#include <cfloat>
+#include "generateRunner.h"
+#include "global.h"
+#include "modelSpec.h"
+#include "utils.h"
 
 //--------------------------------------------------------------------------
 // Anonymous namespace
@@ -1528,7 +1533,7 @@ void genRunner(const NNmodel &model, //!< Model description
 
 #ifndef CPU_ONLY
 void genRunnerGPU(const NNmodel &model, //!< Model description
-                  const string &path //!< Path for code generation
+                  const string &path, //!< Path for code generation
                   const std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
 {
 //    cout << "entering GenRunnerGPU" << std::endl;
@@ -2134,7 +2139,7 @@ void genRunnerGPU(const NNmodel &model, //!< Model description
     os << "// ------------------------------------------------------------------------" << std::endl;
     os << "// the time stepping procedure (using GPU)" << std::endl;
     os << "void stepTimeGPU()" << std::endl;
-    os << CodeStream::OB( ) << std::endl;
+    os << CodeStream::OB(1130) << std::endl;
 
     if (!model.getSynapsePostLearnGroups().empty()) {
         const unsigned int learnGridSz = ceil((float)model.getSynapsePostLearnGridSize() / learnBlkSz);
