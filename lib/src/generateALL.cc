@@ -36,6 +36,7 @@
 #include "synapticEventKernel/postParallelisedBitmask.h"
 #include "synapticEventKernel/postParallelisedDense.h"
 #include "synapticEventKernel/postParallelisedSparse.h"
+#include "synapticEventKernel/preParallelisedSparse.h"
 #include "synapsePostLearnKernel/dense.h"
 #include "synapsePostLearnKernel/sparse.h"
 
@@ -726,6 +727,7 @@ int main(int argc,     //!< number of arguments; expected to be 2
     synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::BaseGPU>(new SynapticEventKernel::PostParallelisedBitmask()));
     synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::BaseGPU>(new SynapticEventKernel::PostParallelisedDense()));
     synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::BaseGPU>(new SynapticEventKernel::PostParallelisedSparse()));
+    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::BaseGPU>(new SynapticEventKernel::PreParallelisedSparse()));
 
     synapseDynamicsKernels.push_back(std::unique_ptr<SynapseDynamicsKernel::BaseGPU>(new SynapseDynamicsKernel::Dense()));
     synapseDynamicsKernels.push_back(std::unique_ptr<SynapseDynamicsKernel::BaseGPU>(new SynapseDynamicsKernel::Sparse()));
