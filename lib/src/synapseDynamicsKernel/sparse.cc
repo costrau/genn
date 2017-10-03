@@ -66,6 +66,7 @@ void SynapseDynamicsKernel::Sparse::generateGroup(CodeStream &os, const SynapseG
                                                 "dd_preInd" + sg.getName() +"[lid]",
                                                 postIdx, "dd_", ftype);
     os << SDcode << std::endl;
+    os << CodeStream::CB(25);
 }
 //----------------------------------------------------------------------------
 unsigned int SynapseDynamicsKernel::Sparse::getMaxNumThreads(const SynapseGroup &sg) const

@@ -65,6 +65,7 @@ void SynapseDynamicsKernel::Dense::generateGroup(CodeStream &os, const SynapseGr
                                                 "lid /" + to_string(sg.getTrgNeuronGroup()->getNumNeurons()),
                                                 postIdx, "dd_", ftype);
     os << SDcode << std::endl;
+    os << CodeStream::CB(25);
 }
 //----------------------------------------------------------------------------
 unsigned int SynapseDynamicsKernel::Dense::getMaxNumThreads(const SynapseGroup &sg) const
