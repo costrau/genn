@@ -17,6 +17,7 @@ void StandardGeneratedSections::neuronResetKernel(
         if (ng.isSpikeEventRequired()) {
             os << devPrefix << "glbSpkCntEvnt" << ng.getName() << "[" << devPrefix << "spkQuePtr" << ng.getName() << "] = 0;" << std::endl;
         }
+
         if (ng.isTrueSpikeRequired()) {
             os << devPrefix << "glbSpkCnt" << ng.getName() << "[" << devPrefix << "spkQuePtr" << ng.getName() << "] = 0;" << std::endl;
         }
@@ -29,9 +30,7 @@ void StandardGeneratedSections::neuronResetKernel(
             os << devPrefix << "glbSpkCntEvnt" << ng.getName() << "[0] = 0;" << std::endl;
         }
 
-        if (ng.isTrueSpikeRequired()) {
-            os << devPrefix << "glbSpkCnt" << ng.getName() << "[0] = 0;" << std::endl;
-        }
+        os << devPrefix << "glbSpkCnt" << ng.getName() << "[0] = 0;" << std::endl;
     }
 }
 //----------------------------------------------------------------------------
