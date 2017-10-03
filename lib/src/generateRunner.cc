@@ -1475,7 +1475,8 @@ void genRunner(const NNmodel &model, //!< Model description
             if (model.isTimingEnabled()) {
                 os << "        synDyn_timer.startTimer();" << std::endl;
             }
-            os << "        calcSynapseDynamicsCPU(t);" << std::endl;
+            // **HACK**
+            //os << "        calcSynapseDynamicsCPU(t);" << std::endl;
             if (model.isTimingEnabled()) {
                 os << "        synDyn_timer.stopTimer();" << std::endl;
                 os << "        synDyn_tme+= synDyn_timer.getElapsedTime();" << std::endl;
