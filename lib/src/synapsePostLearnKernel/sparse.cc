@@ -28,7 +28,6 @@ void SynapsePostLearnKernel::Sparse::generateGlobals(CodeStream &os, const std::
                                                     const std::map<std::string, NeuronGroup>&) const
 {
     // Global variable
-    os << "unsigned int id = " << getBlockSize() << " * blockIdx.x + threadIdx.x;" << std::endl;
     os << "unsigned int lmax, j, r;" << std::endl;
 
     if(std::any_of(getGrid().cbegin(), getGrid().cend(),

@@ -33,9 +33,7 @@ void SynapticEventKernel::PostParallelisedDense::generateGlobals(CodeStream &os,
                                                                  bool, unsigned int,
                                                                  const std::map<std::string, NeuronGroup>&) const
 {
-
     // Global variables
-    os << "unsigned int id = " << getBlockSize() << " * blockIdx.x + threadIdx.x;" << std::endl;
     os << "unsigned int lmax, j, r;" << std::endl;
     os << "unsigned int ipost;" << std::endl;
     os << ftype << " addtoinSyn;" << std::endl;

@@ -6,6 +6,7 @@
 #include <vector>
 
 // GeNN includes
+#include "grid.h"
 #include "kernel.h"
 #include "neuronGroup.h"
 #include "synapseGroup.h"

@@ -27,7 +27,6 @@ int SynapseDynamicsKernel::Sparse::getCompatibility(const SynapseGroup &sg) cons
 void SynapseDynamicsKernel::Sparse::generateGlobals(CodeStream &os, const std::string &ftype) const
 {
     // Global variables
-    os << "unsigned int id = " << getBlockSize() << " * blockIdx.x + threadIdx.x;" << std::endl;
     os << ftype << " addtoinSyn;" << std::endl;
     os << std::endl;
 }

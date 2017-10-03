@@ -27,9 +27,7 @@ void SynapsePostLearnKernel::Dense::generateGlobals(CodeStream &os, const std::s
                                                     bool, unsigned int,
                                                     const std::map<std::string, NeuronGroup>&) const
 {
-
     // Global variables
-    os << "unsigned int id = " << getBlockSize() << " * blockIdx.x + threadIdx.x;" << std::endl;
     os << "unsigned int lmax, j, r;" << std::endl;
     os << "__shared__ unsigned int shSpk[" << getBlockSize() << "];" << std::endl;
 }
