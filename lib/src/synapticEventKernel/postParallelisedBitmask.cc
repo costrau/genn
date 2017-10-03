@@ -34,17 +34,10 @@ int SynapticEventKernel::PostParallelisedBitmask::getCompatibility(const Synapse
     return 1;
 }
 //----------------------------------------------------------------------------
-void SynapticEventKernel::PostParallelisedBitmask::generateKernel(CodeStream &os, bool isResetKernel,
-                                                                  unsigned int totalSynapseBlocks,
-                                                                  const std::map<std::string, NeuronGroup> &ngs,
-                                                                  const std::string &ftype) const
+void SynapticEventKernel::PostParallelisedBitmask::generateGlobals(CodeStream &os, const std::string &ftype,
+                                                                   bool, unsigned int,
+                                                                   const std::map<std::string, NeuronGroup>&) const
 {
-    // synapse kernel header
-    writeKernelDeclaration(os, ftype);
-
-    // synapse kernel code
-    os << CodeStream::OB(75);
-
     // Global variables
     os << "unsigned int id = " << getBlockSize() << " * blockIdx.x + threadIdx.x;" << std::endl;
     os << "unsigned int lmax, j, r;" << std::endl;
@@ -66,57 +59,48 @@ void SynapticEventKernel::PostParallelisedBitmask::generateKernel(CodeStream &os
         os << "__shared__ unsigned int shSpkEvnt[" << getBlockSize() << "];" << std::endl;
     }
 
-    // Loop through the synapse groups
-    for(const auto &g : getGrid()) {
-        const SynapseGroup &sg = std::get<0>(g)->second;
-
-        os << "// synapse group " << std::get<0>(g)->first << std::endl;
-        os << "if ((id >= " << std::get<1>(g) << ") && (id < " << std::get<2>(g) << "))" << CodeStream::OB(77);
-        os << "const unsigned int lid = id - " << std::get<1>(g) << ";" << std::endl;
-
-        // Read delay slot if required
-        StandardGeneratedSections::synapseReadDelaySlot(os, sg);
-
-        // Read out the number of true spikes and spike-like events and
-        // determine how many blocks are required to process them in
-        StandardGeneratedSections::synapseReadEventBlockCount(os, getBlockSize(), sg);
-
-        os << "// only do this for existing neurons" << std::endl;
-        os << "if (lid < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(80);
-        os << "linSyn = dd_inSyn" << std::get<0>(g)->first << "[lid];" << std::endl;
-        os << CodeStream::CB(80);
-
-        // generate the code for processing spike-like events
-        if (sg.isSpikeEventRequired()) {
-            generateInnerLoop(os, sg, "Evnt", ftype);
-        }
-
-        // generate the code for processing true spike events
-        if (sg.isTrueSpikeRequired()) {
-            generateInnerLoop(os, sg, "", ftype);
-        }
-        os << std::endl;
-
-        // Copy updated value back to main memory from register
-        os << "// only do this for existing neurons" << std::endl;
-        os << "if (lid < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(190);
-        os << "dd_inSyn" << std::get<0>(g)->first << "[lid] = linSyn;" << std::endl;
-        os << CodeStream::CB(190);
-
-        // If this is the reset kernel, insert reset kernel
-        if (isResetKernel) {
-           StandardGeneratedSections::synapseResetKernel(os, totalSynapseBlocks, ngs);
-        }
-
-        os << CodeStream::CB(77);
-        os << std::endl;
-    }
-
-    // synapse kernel code
-    os << CodeStream::CB(75);
 }
 //----------------------------------------------------------------------------
-unsigned int SynapticEventKernel::PostParallelisedBitmask::getNumThreads(const SynapseGroup &sg) const
+void SynapticEventKernel::PostParallelisedBitmask::generateGroup(CodeStream &os, const SynapseGroup &sg, const std::string &ftype,
+                                                                 bool isResetKernel, unsigned int totalSynapseBlocks,
+                                                                 const std::map<std::string, NeuronGroup> &ngs) const
+{
+    // Read delay slot if required
+    StandardGeneratedSections::synapseReadDelaySlot(os, sg);
+
+    // Read out the number of true spikes and spike-like events and
+    // determine how many blocks are required to process them in
+    StandardGeneratedSections::synapseReadEventBlockCount(os, getBlockSize(), sg);
+
+    os << "// only do this for existing neurons" << std::endl;
+    os << "if (lid < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(80);
+    os << "linSyn = dd_inSyn" << sg.getName() << "[lid];" << std::endl;
+    os << CodeStream::CB(80);
+
+    // generate the code for processing spike-like events
+    if (sg.isSpikeEventRequired()) {
+        generateInnerLoop(os, sg, "Evnt", ftype);
+    }
+
+    // generate the code for processing true spike events
+    if (sg.isTrueSpikeRequired()) {
+        generateInnerLoop(os, sg, "", ftype);
+    }
+    os << std::endl;
+
+    // Copy updated value back to main memory from register
+    os << "// only do this for existing neurons" << std::endl;
+    os << "if (lid < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(190);
+    os << "dd_inSyn" << sg.getName() << "[lid] = linSyn;" << std::endl;
+    os << CodeStream::CB(190);
+
+    // If this is the reset kernel, insert reset kernel
+    if (isResetKernel) {
+        StandardGeneratedSections::synapseResetKernel(os, totalSynapseBlocks, ngs);
+    }
+}
+//----------------------------------------------------------------------------
+unsigned int SynapticEventKernel::PostParallelisedBitmask::getMaxNumThreads(const SynapseGroup &sg) const
 {
     return sg.getTrgNeuronGroup()->getNumNeurons();
 }

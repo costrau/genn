@@ -61,6 +61,6 @@ void genNeuronKernel(const NNmodel &model,  //!< Model description
 
 void genSynapseKernel(const NNmodel &model, //!< Model description
                       const string &path, //!< Path for code generation
-                      const std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels);
+                      const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels);
 
 #endif // CPU_ONLY

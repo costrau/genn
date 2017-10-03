@@ -30,17 +30,10 @@ int SynapticEventKernel::PostParallelisedSparse::getCompatibility(const SynapseG
     return 1;
 }
 //----------------------------------------------------------------------------
-void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os, bool isResetKernel,
-                                                                 unsigned int totalSynapseBlocks,
-                                                                 const std::map<std::string, NeuronGroup> &ngs,
-                                                                 const std::string &ftype) const
+void SynapticEventKernel::PostParallelisedSparse::generateGlobals(CodeStream &os, const std::string &ftype,
+                                                                  bool, unsigned int,
+                                                                  const std::map<std::string, NeuronGroup>&) const
 {
-    // synapse kernel header
-    writeKernelDeclaration(os, ftype);
-
-    // synapse kernel code
-    os << CodeStream::OB(75);
-
     // Global variables
     os << "unsigned int id = " << getBlockSize() << " * blockIdx.x + threadIdx.x;" << std::endl;
     os << "unsigned int lmax, j, r;" << std::endl;
@@ -84,64 +77,55 @@ void SynapticEventKernel::PostParallelisedSparse::generateKernel(CodeStream &os,
         os << "__shared__ unsigned int shSpkEvntPrePos[" << getBlockSize() << "];" << std::endl;
         os << "__shared__ unsigned int shSpkEvntNPost[" << getBlockSize() << "];" << std::endl;
     }
-
-    // Loop through the synapse groups
-    for(const auto &g : getGrid()) {
-        const SynapseGroup &sg = std::get<0>(g)->second;
-        const bool useSharedMemory = (sg.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize());
-
-        os << "// synapse group " << std::get<0>(g)->first << std::endl;
-        os << "if ((id >= " << std::get<1>(g) << ") && (id < " << std::get<2>(g) << "))" << CodeStream::OB(77);
-        os << "const unsigned int lid = id - " << std::get<1>(g) << ";" << std::endl;
-
-        // Read delay slot if required
-        StandardGeneratedSections::synapseReadDelaySlot(os, sg);
-
-        // Read out the number of true spikes and spike-like events and
-        // determine how many blocks are required to process them in
-        StandardGeneratedSections::synapseReadEventBlockCount(os, getBlockSize(), sg);
-
-        // If we're using shared memory, copy current input into register
-        if(useSharedMemory) {
-            os << "// only do this for existing neurons" << std::endl;
-            os << "if (lid < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(80);
-            os << "linSyn = dd_inSyn" << std::get<0>(g)->first << "[lid];" << std::endl;
-            os << CodeStream::CB(80);
-        }
-
-        // generate the code for processing spike-like events
-        if (sg.isSpikeEventRequired()) {
-            generateInnerLoop(os, sg, useSharedMemory, "Evnt", ftype);
-        }
-
-        // generate the code for processing true spike events
-        if (sg.isTrueSpikeRequired()) {
-            generateInnerLoop(os, sg, useSharedMemory, "", ftype);
-        }
-        os << std::endl;
-
-        // If we're using shared memory, add input transferred to register, back to main memory
-        if(useSharedMemory) {
-            os << "// only do this for existing neurons" << std::endl;
-            os << "if (lid < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(190);
-            os << "dd_inSyn" << std::get<0>(g)->first << "[lid] = linSyn;" << std::endl;
-            os << CodeStream::CB(190);
-        }
-
-        // If this is the reset kernel, insert reset kernel
-        if (isResetKernel) {
-           StandardGeneratedSections::synapseResetKernel(os, totalSynapseBlocks, ngs);
-        }
-
-        os << CodeStream::CB(77);
-        os << std::endl;
-    }
-
-    // synapse kernel code
-    os << CodeStream::CB(75);
 }
 //----------------------------------------------------------------------------
-unsigned int SynapticEventKernel::PostParallelisedSparse::getNumThreads(const SynapseGroup &sg) const
+void SynapticEventKernel::PostParallelisedSparse::generateGroup(CodeStream &os, const SynapseGroup &sg, const std::string &ftype,
+                                                                bool isResetKernel, unsigned int totalSynapseBlocks,
+                                                                const std::map<std::string, NeuronGroup> &ngs) const
+{
+    const bool useSharedMemory = (sg.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize());
+
+    // Read delay slot if required
+    StandardGeneratedSections::synapseReadDelaySlot(os, sg);
+
+    // Read out the number of true spikes and spike-like events and
+    // determine how many blocks are required to process them in
+    StandardGeneratedSections::synapseReadEventBlockCount(os, getBlockSize(), sg);
+
+    // If we're using shared memory, copy current input into register
+    if(useSharedMemory) {
+        os << "// only do this for existing neurons" << std::endl;
+        os << "if (lid < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(80);
+        os << "linSyn = dd_inSyn" << sg.getName() << "[lid];" << std::endl;
+        os << CodeStream::CB(80);
+    }
+
+    // generate the code for processing spike-like events
+    if (sg.isSpikeEventRequired()) {
+        generateInnerLoop(os, sg, useSharedMemory, "Evnt", ftype);
+    }
+
+    // generate the code for processing true spike events
+    if (sg.isTrueSpikeRequired()) {
+        generateInnerLoop(os, sg, useSharedMemory, "", ftype);
+    }
+    os << std::endl;
+
+    // If we're using shared memory, add input transferred to register, back to main memory
+    if(useSharedMemory) {
+        os << "// only do this for existing neurons" << std::endl;
+        os << "if (lid < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(190);
+        os << "dd_inSyn" << sg.getName() << "[lid] = linSyn;" << std::endl;
+        os << CodeStream::CB(190);
+    }
+
+    // If this is the reset kernel, insert reset kernel
+    if (isResetKernel) {
+        StandardGeneratedSections::synapseResetKernel(os, totalSynapseBlocks, ngs);
+    }
+}
+//----------------------------------------------------------------------------
+unsigned int SynapticEventKernel::PostParallelisedSparse::getMaxNumThreads(const SynapseGroup &sg) const
 {
     return sg.getMaxConnections();
 }
@@ -214,6 +198,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateInnerLoop(
     os << "prePos = shSpk" << postfix << "PrePos[j];" << std::endl;
     os << "npost = shSpk" << postfix << "NPost[j];" << std::endl;
 
+    // If this thread is within the sparse row
     os << "if (lid < npost)" << CodeStream::OB(140);
     os << "prePos += lid;" << std::endl;
     os << "ipost = dd_ind" << sg.getName() << "[prePos];" << std::endl;

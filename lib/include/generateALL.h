@@ -41,7 +41,7 @@ using namespace std;
 
 void generate_model_runner(const NNmodel &model,  //!< Model description
                            const string &path,      //!< Path where the generated code will be deposited
-                           std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels);
+                           std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels);
 
 
 //--------------------------------------------------------------------------
@@ -55,5 +55,5 @@ void generate_model_runner(const NNmodel &model,  //!< Model description
 #ifndef CPU_ONLY
 void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                   const string &path,     //!< path the generated code will be deposited
-                  std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels);
+                  std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels);
 #endif

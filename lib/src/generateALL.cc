@@ -54,7 +54,7 @@
 
 void generate_model_runner(const NNmodel &model,  //!< Model description
                            const string &path,      //!< Path where the generated code will be deposited
-                           std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
+                           std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels)
 {
 #ifdef _WIN32
   _mkdir((path + "\\" + model.getName() + "_CODE").c_str());
@@ -102,12 +102,14 @@ void generate_model_runner(const NNmodel &model,  //!< Model description
 //--------------------------------------------------------------------------
 
 #ifndef CPU_ONLY
-void assignSynapticEventKernels(const NNmodel &model, std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
+template<typename GroupType, typename KernelType>
+void assignKernels(const std::map<std::string, GroupType> &groups,
+                   std::vector<std::unique_ptr<KernelType>> &synapticEventKernels)
 {
     // Loop through synapse groups in model
-    for(auto s = model.getSynapseGroups().cbegin(); s != model.getSynapseGroups().cend(); ++s) {
+    for(auto s = groups.cbegin(); s != groups.cend(); ++s) {
         // Loop through possible synaptic event kernels
-        SynapticEventKernel::Base *mostCompatibleKernel = nullptr;
+        KernelType *mostCompatibleKernel = nullptr;
         int highestCompatibility = std::numeric_limits<int>::min();
         for(auto &k : synapticEventKernels) {
             // If this kernel is more compatible than current best, update best
@@ -125,15 +127,15 @@ void assignSynapticEventKernels(const NNmodel &model, std::vector<std::unique_pt
         }
         // Otherwise, add synapse group to this kernel
         else {
-            std::cout << "Assigning synapse group '" << s->second.getName() << "' to synapse event kernel '" << mostCompatibleKernel->getKernelName() << "'" << std::endl;
-            mostCompatibleKernel->addSynapseGroup(s);
+            std::cout << "Assigning group '" << s->second.getName() << "' to kernel '" << mostCompatibleKernel->getKernelName() << "'" << std::endl;
+            mostCompatibleKernel->addGroup(s);
         }
     }
 }
 
 void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                   const string &path,     //!< path the generated code will be deposited
-                  std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
+                  std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels)
 {
     enum Kernel{ KernelLearnSynapsesPost, KernelCalcSynapseDynamics, KernelCalcNeurons, KernelLastHardCoded};
 
@@ -186,7 +188,7 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
 
         // Get the size of each synapse group simulated by each synaptic event kernel
         for(unsigned int k = 0; k < synapticEventKernels.size(); k++) {
-            synapticEventKernels[k]->getNumThreads(groupSize[KernelLastHardCoded + k]);
+            synapticEventKernels[k]->getMaxNumThreads(groupSize[KernelLastHardCoded + k]);
         }
 
         // Populate the neuron group size
@@ -662,15 +664,15 @@ int main(int argc,     //!< number of arguments; expected to be 2
     }
 
     string path = argv[1];
-    std::vector<std::unique_ptr<SynapticEventKernel::Base>> synapticEventKernels;
+    std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> synapticEventKernels;
 #ifndef CPU_ONLY
     // Add synaptic event kernels to array
-    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedBitmask()));
-    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedDense()));
-    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::Base>(new SynapticEventKernel::PostParallelisedSparse()));
+    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::BaseGPU>(new SynapticEventKernel::PostParallelisedBitmask()));
+    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::BaseGPU>(new SynapticEventKernel::PostParallelisedDense()));
+    synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::BaseGPU>(new SynapticEventKernel::PostParallelisedSparse()));
 
     // Assign synapse populations to synaptic event kernels
-    assignSynapticEventKernels(*model, synapticEventKernels);
+    assignKernels(model->getSynapseGroups(), synapticEventKernels);
 
     chooseDevice(*model, path, synapticEventKernels);
 #endif // CPU_ONLY

@@ -1534,7 +1534,7 @@ void genRunner(const NNmodel &model, //!< Model description
 #ifndef CPU_ONLY
 void genRunnerGPU(const NNmodel &model, //!< Model description
                   const string &path, //!< Path for code generation
-                  const std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
+                  const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels)
 {
 //    cout << "entering GenRunnerGPU" << std::endl;
     string name= path + "/" + model.getName() + "_CODE/runnerGPU.cc";

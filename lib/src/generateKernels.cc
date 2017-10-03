@@ -41,65 +41,6 @@
 //-------------------------------------------------------------------------
 namespace
 {
-// Various means by which postsynaptic-parallelised synapses can provide neurons with input
-/*enum class PostsynapticInputType
-{
-    REGISTER,
-    SHARED_MEMORY,
-    GLOBAL_MEMORY_ATOMIC,
-};
-
-PostsynapticInputType getPostsynapticInputType(const SynapseGroup &sg)
-{
-    if(sg.getMatrixType() & SynapseMatrixConnectivity::SPARSE) {
-        // If the target population is small enough, use shared memory for input
-        if(sg.getTrgNeuronGroup()->getNumNeurons() <= synapseBlkSz) {
-            return PostsynapticInputType::SHARED_MEMORY;
-        }
-        // Otherwise use global memory atomics
-        else {
-            return PostsynapticInputType::GLOBAL_MEMORY_ATOMIC;
-        }
-    }
-    // Otherwise updates can be combined directly in register
-    else {
-        return PostsynapticInputType::REGISTER;
-    }
-}
-
-bool doesSynapseGroupUseLinSyn(const SynapseGroup &sg)
-{
-    // Threads can only ever sum linear updates if they are parallelised postsynaptically
-    if(sg.getSpanType() == SynapseGroup::SpanType::POSTSYNAPTIC) {
-        // If connectivity is dense then linSyn is used directly so return true
-        if(!(sg.getMatrixType() & SynapseMatrixConnectivity::SPARSE)) {
-            return true;
-        }
-        // Otherwise, if target population is small enough to fit within a block, input will
-        // be written to shared memory and there will be enough threads to write out linSyn
-        else if(sg.getTrgNeuronGroup()->getNumNeurons() <= synapseBlkSz) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool shouldSynapseGroupUseSharedSparse(const SynapseGroup &sg)
-{
-    // This synapse group can copy it's sparse structure into shared memory if it is
-    // postsynaptically parallelised and uses sparse connectivity not implemented as a bitmask
-    if(sg.getSpanType() == SynapseGroup::SpanType::POSTSYNAPTIC
-        && (sg.getMatrixType() & SynapseMatrixConnectivity::SPARSE)
-        && !(sg.getMatrixType() & SynapseMatrixConnectivity::BITMASK))
-    {
-        return true;
-    }
-    else {
-        return false;
-    }
-}*/
-
 // parallelisation along pre-synaptic spikes, looped over post-synaptic neurons
 /*void generatePreParallelisedCode(
     CodeStream &os, //!< output stream for code
@@ -220,200 +161,7 @@ bool shouldSynapseGroupUseSharedSparse(const SynapseGroup &sg)
     }
     os << CodeStream::CB(102);
 }
-
-// classical parallelisation of post-synaptic neurons in parallel and spikes in a loop
-void generatePostParallelisedCode(
-    CodeStream &os, //!< output stream for code
-    const SynapseGroup &sg,
-    const string &localID, //!< the variable name of the local ID of the thread within the synapse group
-    const string &postfix, //!< whether to generate code for true spikes or spike type events
-    const string &ftype)
-{
-    const bool evnt = (postfix == "Evnt");
-    const int UIntSz = sizeof(unsigned int) * 8;
-    const int logUIntSz = (int) (logf((float) UIntSz) / logf(2.0f) + 1e-5f);
-    const auto *wu = sg.getWUModel();
-    const PostsynapticInputType inputType = getPostsynapticInputType(sg);
-
-    // Create iteration context to iterate over the variables; derived and extra global parameters
-    DerivedParamNameIterCtx wuDerivedParams(wu->getDerivedParams());
-    ExtraGlobalParamNameIterCtx wuExtraGlobalParams(wu->getExtraGlobalParams());
-    VarNameIterCtx wuVars(wu->getVars());
-
-    // We can copy sparse matrix structure into shared variables if matrix is sparse but not implemented as a bitmask
-    const bool useSharedSparse = shouldSynapseGroupUseSharedSparse(sg);
-
-    // shSpk isn't required at all if there are no presynaptic variables
-    const bool shSpkRequired = evnt ? sg.arePreVarsRequiredForSpikeLikeEvent() : sg.arePreVarsRequiredForTrueSpike();
-
-    os << "// process presynaptic events: " << (evnt ? "Spike type events" : "True Spikes") << std::endl;
-    os << "for (r = 0; r < numSpikeSubsets" << postfix << "; r++)" << CodeStream::OB(90);
-    os << "if (r == numSpikeSubsets" << postfix << " - 1) lmax = ((lscnt" << postfix << "-1) % BLOCKSZ_SYN) +1;" << std::endl;
-    os << "else lmax = BLOCKSZ_SYN;" << std::endl;
-    os << "__syncthreads();" << std::endl;
-    os << "if (threadIdx.x < lmax)" << CodeStream::OB(100);
-    os << "j = dd_glbSpk" << postfix << sg.getSrcNeuronGroup()->getName() << "[" << sg.getOffsetPre() << "(r * BLOCKSZ_SYN) + threadIdx.x];" << std::endl;
-    if(!useSharedSparse || shSpkRequired) {
-        os << "shSpk" << postfix << "[threadIdx.x] = j;" << std::endl;
-    }
-    if(useSharedSparse) {
-        os << "prePos = dd_indInG" << sg.getName() << "[j];" << std::endl;
-        os << "shSpk" << postfix << "PrePos[threadIdx.x] = prePos;" << std::endl;
-        os << "shSpk" << postfix << "NPost[threadIdx.x] = dd_indInG" << sg.getName() << "[j + 1] - prePos;" << std::endl;
-    }
-    os << CodeStream::CB(100);
-
-    // If input should be applied via shared memory, zero this
-    // **NOTE** there are guaranteed to be enough threads to do this as maximum shared memory size IS block size
-    if (inputType == PostsynapticInputType::SHARED_MEMORY) {
-        os << "if (threadIdx.x < " << sg.getTrgNeuronGroup()->getNumNeurons() << ") shLg[threadIdx.x] = 0;" << std::endl;
-    }
-    os << "__syncthreads();" << std::endl;
-
-    // If connectivity is sparse read max connections set by user, otherwise always use target population size
-    const unsigned int maxConnections = (sg.getMatrixType() & SynapseMatrixConnectivity::SPARSE) ? sg.getMaxConnections() : sg.getTrgNeuronGroup()->getNumNeurons();
-    
-    os << "// loop through all incoming spikes" << std::endl;
-    os << "for (j = 0; j < lmax; j++)" << CodeStream::OB(110);
-    os << "// only work on existing neurons" << std::endl;
-    os << "if (" << localID << " < " << maxConnections << ")" << CodeStream::OB(120);
-    if (sg.getMatrixType() & SynapseMatrixConnectivity::BITMASK) {
-        os << "unsigned int gid = (shSpk" << postfix << "[j] * " << sg.getTrgNeuronGroup()->getNumNeurons() << " + " << localID << ");" << std::endl;
-    }
-
-    if (!wu->getSimSupportCode().empty()) {
-        os << "using namespace " << sg.getName() << "_weightupdate_simCode;" << std::endl;
-    }
-    if (evnt && sg.isEventThresholdReTestRequired()) {
-        os << "if ";
-        if (sg.getMatrixType() & SynapseMatrixConnectivity::BITMASK) {
-            // Note: we will just access global mem. For compute >= 1.2 simultaneous access to same global mem in the (half-)warp will be coalesced - no worries
-            os << "((B(dd_gp" << sg.getName() << "[gid >> " << logUIntSz << "], gid & " << UIntSz - 1 << ")) && ";
-        }
-
-        // code substitutions ----
-        string eCode = wu->getEventThresholdConditionCode();
-        StandardSubstitutions::weightUpdateThresholdCondition(eCode, sg, wuDerivedParams, wuExtraGlobalParams,
-                                                              "shSpkEvnt[j]", "ipost", "dd_", ftype);
-        // end code substitutions ----
-        os << "(" << eCode << ")";
-
-        if (sg.getMatrixType() & SynapseMatrixConnectivity::BITMASK) {
-            os << ")";
-        }
-        os << CodeStream::OB(130);
-    }
-    else if (sg.getMatrixType() & SynapseMatrixConnectivity::BITMASK) {
-        os << "if (B(dd_gp" << sg.getName() << "[gid >> " << logUIntSz << "], gid & " << UIntSz - 1 << "))" << CodeStream::OB(135);
-    }
-
-    if (sg.getMatrixType() & SynapseMatrixConnectivity::SPARSE) { // SPARSE
-        // If sparse structure has been copied into shared memory, copy offsets from shared memory
-        if(useSharedSparse) {
-            os << "prePos = shSpk" << postfix << "PrePos[j];" << std::endl;
-            os << "npost = shSpk" << postfix << "NPost[j];" << std::endl;
-        }
-        // Otherwise, load from global memory indices
-        else {
-            os << "prePos = dd_indInG" << sg.getName() << "[shSpk" << postfix << "[j]];" << std::endl;
-            os << "npost = dd_indInG" << sg.getName() << "[shSpk" << postfix << "[j] + 1] - prePos;" << std::endl;
-        }
-        os << "if (" << localID << " < npost)" << CodeStream::OB(140);
-        os << "prePos += " << localID << ";" << std::endl;
-        os << "ipost = dd_ind" << sg.getName() << "[prePos];" << std::endl;
-    }
-    else { // DENSE
-        os << "ipost = " << localID << ";" << std::endl;
-    }
-
-    // Code substitutions ----------------------------------------------------------------------------------
-    string wCode = (evnt ? wu->getEventCode() : wu->getSimCode());
-    substitute(wCode, "$(t)", "t");
-
-    // If input is applied to memory
-    if (inputType == PostsynapticInputType::GLOBAL_MEMORY_ATOMIC || inputType == PostsynapticInputType::SHARED_MEMORY) { // SPARSE
-        // If we're operating directly in device memory, substitute in correct atomic operation and address
-        if (inputType == PostsynapticInputType::GLOBAL_MEMORY_ATOMIC) {
-            substitute(wCode, "$(updatelinsyn)", getFloatAtomicAdd(ftype) + "($(inSyn), $(addtoinSyn))");
-            substitute(wCode, "$(inSyn)", "&dd_inSyn" + sg.getName() + "[ipost]");
-        }
-        // Otherwise, substitute in shared memory address
-        else {
-            substitute(wCode, "$(updatelinsyn)", "$(inSyn) += $(addtoinSyn)");
-            substitute(wCode, "$(inSyn)", "shLg[ipost]");
-        }
-
-        if (sg.getMatrixType() & SynapseMatrixWeight::INDIVIDUAL) {
-            name_substitutions(wCode, "dd_", wuVars.nameBegin, wuVars.nameEnd, sg.getName() + "[prePos]");
-        }
-    }
-    // Otherwise we can write directly to linSyn
-    else {
-        substitute(wCode, "$(updatelinsyn)", "$(inSyn) += $(addtoinSyn)");
-        substitute(wCode, "$(inSyn)", "linSyn");
-        if (sg.getMatrixType() & SynapseMatrixWeight::INDIVIDUAL) {
-            name_substitutions(wCode, "dd_", wuVars.nameBegin, wuVars.nameEnd, sg.getName() + "[shSpk"
-                                + postfix + "[j] * " + to_string(sg.getTrgNeuronGroup()->getNumNeurons()) + "+ ipost]");
-        }
-    }
-
-    StandardSubstitutions::weightUpdateSim(wCode, sg, wuVars, wuDerivedParams, wuExtraGlobalParams,
-                                           "shSpk" + postfix + "[j]", "ipost", "dd_", ftype);
-    // end Code substitutions -------------------------------------------------------------------------
-    os << wCode << std::endl;
-
-    if (sg.getMatrixType() & SynapseMatrixConnectivity::SPARSE) {
-        os << CodeStream::CB(140); // end if (id < npost)
-    }
-
-    if (evnt && sg.isEventThresholdReTestRequired()) {
-        os << CodeStream::CB(130); // end if (eCode)
-    }
-    else if (sg.getMatrixType() & SynapseMatrixConnectivity::BITMASK) {
-        os << CodeStream::CB(135); // end if (B(dd_gp" << sg.getName() << "[gid >> " << logUIntSz << "], gid
-    }
-    os << CodeStream::CB(120) << std::endl;
-
-    // If input should be applied via shared memory, copy out into linSyn output register
-    if (inputType == PostsynapticInputType::SHARED_MEMORY) {
-        os << "__syncthreads();" << std::endl;
-        os << "if (threadIdx.x < " << sg.getTrgNeuronGroup()->getNumNeurons() << ")" << CodeStream::OB(136); // need to write back results
-        os << "linSyn += shLg[" << localID << "];" << std::endl;
-        os << "shLg[" << localID << "] = 0;" << std::endl;
-        os << CodeStream::CB(136) << std::endl;
-
-        os << "__syncthreads();" << std::endl;
-    }
-    os << CodeStream::CB(110) << std::endl;
-    os << CodeStream::CB(90) << std::endl;
-}*/
-//-------------------------------------------------------------------------
-/*!
-  \brief Function for generating the CUDA synapse kernel code that handles presynaptic
-  spikes or spike type events
-
 */
-//-------------------------------------------------------------------------
-/*void generate_process_presynaptic_events_code(
-    CodeStream &os, //!< output stream for code
-    const SynapseGroup &sg,
-    const string &localID, //!< the variable name of the local ID of the thread within the synapse group
-    const string &postfix, //!< whether to generate code for true spikes or spike type events
-    const string &ftype)
-{
-    const bool evnt = (postfix == "Evnt");
-
-     if ((evnt && sg.isSpikeEventRequired()) || (!evnt && sg.isTrueSpikeRequired())) {
-        // parallelisation along pre-synaptic spikes, looped over post-synaptic neurons
-        if (sg.getSpanType() == SynapseGroup::SpanType::PRESYNAPTIC) {
-            generatePreParallelisedCode(os, sg, localID, postfix, ftype);
-        }
-        // classical parallelisation of post-synaptic neurons in parallel and spikes in a loop
-        else {
-            generatePostParallelisedCode(os, sg, localID, postfix, ftype);
-        }
-    }
-}*/
 
 void genSynapseDynamics(const NNmodel &model, //!< Model description
                         CodeStream &os) //!< Code stream to write code to
@@ -1212,7 +960,7 @@ void genNeuronKernel(const NNmodel &model, //!< Model description
 
 void genSynapseKernel(const NNmodel &model, //!< Model description
                       const string &path, //!< Path for code generation
-                      const std::vector<std::unique_ptr<SynapticEventKernel::Base>> &synapticEventKernels)
+                      const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels)
 {
     ofstream fs;
     string name = path + "/" + model.getName() + "_CODE/synapseKrnl.cc";
@@ -1252,9 +1000,9 @@ void genSynapseKernel(const NNmodel &model, //!< Model description
     const bool isSynapseResetKernel = (model.getResetKernel() == GENN_FLAGS::calcSynapses);
     const unsigned int totalSynapseBlocks = std::accumulate(synapticEventKernels.cbegin(), synapticEventKernels.cend(),
                                                             (unsigned int)0,
-                                                            [](unsigned int a, const std::unique_ptr<SynapticEventKernel::Base> &s)
+                                                            [](unsigned int a, const std::unique_ptr<SynapticEventKernel::BaseGPU> &s)
                                                             {
-                                                                return (a + s->getGridSizeBlocks());
+                                                                return (a + s->getMaxGridSizeBlocks());
                                                             });
     // Loop through synaptic event kernels and generate code for those in use
     for(const auto &s : synapticEventKernels) {
