@@ -186,7 +186,7 @@ void StandardSubstitutions::weightUpdateSim(
 
 void StandardSubstitutions::weightUpdateDynamics(
     std::string &SDcode,
-    const SynapseGroup *sg,
+    const SynapseGroup &sg,
     const VarNameIterCtx &wuVars,
     const DerivedParamNameIterCtx &wuDerivedParams,
     const ExtraGlobalParamNameIterCtx &wuExtraGlobalParams,
@@ -195,18 +195,18 @@ void StandardSubstitutions::weightUpdateDynamics(
     const string &devPrefix,
     const std::string &ftype)
 {
-     if (sg->getMatrixType() & SynapseMatrixWeight::GLOBAL) {
-         value_substitutions(SDcode, wuVars.nameBegin, wuVars.nameEnd, sg->getWUInitVals());
+     if (sg.getMatrixType() & SynapseMatrixWeight::GLOBAL) {
+         value_substitutions(SDcode, wuVars.nameBegin, wuVars.nameEnd, sg.getWUInitVals());
      }
 
     // substitute parameter values for parameters in synapseDynamics code
-    value_substitutions(SDcode, sg->getWUModel()->getParamNames(), sg->getWUParams());
+    value_substitutions(SDcode, sg.getWUModel()->getParamNames(), sg.getWUParams());
 
     // substitute values for derived parameters in synapseDynamics code
-    value_substitutions(SDcode, wuDerivedParams.nameBegin, wuDerivedParams.nameEnd, sg->getWUDerivedParams());
-    name_substitutions(SDcode, "", wuExtraGlobalParams.nameBegin, wuExtraGlobalParams.nameEnd, sg->getName());
+    value_substitutions(SDcode, wuDerivedParams.nameBegin, wuDerivedParams.nameEnd, sg.getWUDerivedParams());
+    name_substitutions(SDcode, "", wuExtraGlobalParams.nameBegin, wuExtraGlobalParams.nameEnd, sg.getName());
     substitute(SDcode, "$(addtoinSyn)", "addtoinSyn");
-    neuron_substitutions_in_synaptic_code(SDcode, sg, preIdx, postIdx, devPrefix);
+    neuron_substitutions_in_synaptic_code(SDcode, &sg, preIdx, postIdx, devPrefix);
     SDcode= ensureFtype(SDcode, ftype);
     checkUnreplacedVariables(SDcode, "synapseDynamics");
 }

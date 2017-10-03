@@ -257,16 +257,6 @@ unsigned int NNmodel::getSynapsePostLearnGridSize() const
     }
 }
 
-unsigned int NNmodel::getSynapseDynamicsGridSize() const
-{
-    if(m_SynapseDynamicsGroups.empty()) {
-        return 0;
-    }
-    else {
-        return m_SynapseDynamicsGroups.rbegin()->second.second;
-    }
-}
-
 const SynapseGroup *NNmodel::findSynapseGroup(const std::string &name) const
 {
     auto synapseGroup = m_SynapseGroups.find(name);
@@ -297,9 +287,13 @@ SynapseGroup *NNmodel::findSynapseGroup(const std::string &name)
     }
 }
 
-bool NNmodel::isSynapseGroupDynamicsRequired(const std::string &name) const
+bool NNmodel::areSynapseDynamicsRequired() const
 {
-    return (m_SynapseDynamicsGroups.find(name) != end(m_SynapseDynamicsGroups));
+    return std::any_of(m_SynapseGroups.cbegin(), m_SynapseGroups.cend(),
+                       [](const std::pair<std::string, SynapseGroup> &sg)
+                       {
+                           return sg.second.areSynapseDynamicsRequired();
+                       });
 }
 
 bool NNmodel::isSynapseGroupPostLearningRequired(const std::string &name) const
@@ -693,7 +687,6 @@ void NNmodel::setPopulationSums()
     }
 
     // SYNAPSE groups
-    unsigned int paddedSynapseDynamicsIDStart = 0;
     unsigned int paddedSynapsePostLearnIDStart = 0;
     for(auto &s : m_SynapseGroups) {
         if (!s.second.getWUModel()->getLearnPostCode().empty()) {
@@ -705,16 +698,6 @@ void NNmodel::setPopulationSums()
             m_SynapsePostLearnGroups[s.first] = std::pair<unsigned int, unsigned int>(
                 startID, paddedSynapsePostLearnIDStart);
         }
-
-         if (!s.second.getWUModel()->getSynapseDynamicsCode().empty()) {
-            const unsigned int startID = paddedSynapseDynamicsIDStart;
-            paddedSynapseDynamicsIDStart += s.second.getPaddedDynKernelSize(synDynBlkSz);
-
-            // Add this synapse group to map of synapse groups with dynamics
-            // or update the existing entry with the new block sizes
-            m_SynapseDynamicsGroups[s.first] = std::pair<unsigned int, unsigned int>(
-                startID, paddedSynapseDynamicsIDStart);
-         }
     }
 }
 
@@ -801,7 +784,6 @@ void NNmodel::finalize()
         // Make extra global parameter lists
         s.second.addExtraGlobalNeuronParams(neuronKernelParameters);
         s.second.addExtraGlobalPostLearnParams(simLearnPostKernelParameters);
-        s.second.addExtraGlobalSynapseDynamicsParams(synapseDynamicsKernelParameters);
     }
 
     setPopulationSums();

@@ -82,18 +82,6 @@ void SynapseGroup::initDerivedParams(double dt)
     }
 }
 
-unsigned int SynapseGroup::getPaddedDynKernelSize(unsigned int blockSize) const
-{
-    if (getMatrixType() & SynapseMatrixConnectivity::SPARSE) {
-        // paddedSize is the lowest multiple of synDynBlkSz >= neuronN[synapseSource[i]] * maxConn[i]
-        return ceil((double) getSrcNeuronGroup()->getNumNeurons() * getMaxConnections() / (double) blockSize) * (double) blockSize;
-    }
-    else {
-        // paddedSize is the lowest multiple of synDynBlkSz >= neuronN[synapseSource[i]] * neuronN[synapseTarget[i]]
-        return ceil((double) getSrcNeuronGroup()->getNumNeurons() * getTrgNeuronGroup()->getNumNeurons() / (double) blockSize) * (double) blockSize;
-    }
-}
-
 unsigned int SynapseGroup::getPaddedPostLearnKernelSize(unsigned int blockSize) const
 {
     return ceil((double) getSrcNeuronGroup()->getNumNeurons() / (double) blockSize) * (double) blockSize;

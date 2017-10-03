@@ -26,6 +26,7 @@
 #include <string>
 
 // GeNN includes
+#include "synapseDynamicsKernel/base.h"
 #include "synapticEventKernel/base.h"
 
 // Forward declarations
@@ -66,7 +67,8 @@ void genSupportCode(const NNmodel &model, //!< Model description
 #ifndef CPU_ONLY
 void genRunnerGPU(const NNmodel &model, //!< Model description
                   const string &path, //!< Path for code generation
-                  const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels);
+                  const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels,
+                  const std::vector<std::unique_ptr<SynapseDynamicsKernel::BaseGPU>> &synapseDynamicsKernels);
 #endif // CPU_ONLY
 
 

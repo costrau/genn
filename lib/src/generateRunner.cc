@@ -304,7 +304,7 @@ void genDefinitions(const NNmodel &model, //!< Model description
             os << "extern double learning_tme;" << std::endl;
             os << "extern CStopWatch learning_timer;" << std::endl;
         }
-        if (!model.getSynapseDynamicsGroups().empty()) {
+        if (model.areSynapseDynamicsRequired()) {
 #ifndef CPU_ONLY
             os << "extern cudaEvent_t synDynStart, synDynStop;" << std::endl;
 #endif
@@ -798,7 +798,7 @@ void genRunner(const NNmodel &model, //!< Model description
             os << "double learning_tme;" << std::endl;
             os << "CStopWatch learning_timer;" << std::endl;
         }
-        if (!model.getSynapseDynamicsGroups().empty()) {
+        if (model.areSynapseDynamicsRequired()) {
 #ifndef CPU_ONLY
             os << "cudaEvent_t synDynStart, synDynStop;" << std::endl;
 #endif
@@ -869,7 +869,7 @@ void genRunner(const NNmodel &model, //!< Model description
             os << "__device__ unsigned int *dd_indInG" << s.first << ";" << std::endl;
             os << "unsigned int *d_ind" << s.first << ";" << std::endl;
             os << "__device__ unsigned int *dd_ind" << s.first << ";" << std::endl;
-            if (model.isSynapseGroupDynamicsRequired(s.first)) {
+            if (s.second.areSynapseDynamicsRequired()) {
                 os << "unsigned int *d_preInd" << s.first << ";" << std::endl;
                 os << "__device__ unsigned int *dd_preInd" << s.first << ";" << std::endl;
             }
@@ -990,7 +990,7 @@ void genRunner(const NNmodel &model, //!< Model description
 #endif
             os << "    learning_tme= 0.0;" << std::endl;
         }
-        if (!model.getSynapseDynamicsGroups().empty()) {
+        if (model.areSynapseDynamicsRequired()) {
 #ifndef CPU_ONLY
             os << "    cudaEventCreate(&synDynStart);" << std::endl;
             os << "    cudaEventCreate(&synDynStop);" << std::endl;
@@ -1245,7 +1245,7 @@ void genRunner(const NNmodel &model, //!< Model description
             allocate_host_variable(os, "unsigned int", "C" + s.first + ".ind", false,
                                    "connN");
 
-            if (model.isSynapseGroupDynamicsRequired(s.first)) {
+            if (s.second.areSynapseDynamicsRequired()) {
                 allocate_host_variable(os, "unsigned int", "C" + s.first + ".preInd", false,
                                        "connN");
             } else {
@@ -1277,7 +1277,7 @@ void genRunner(const NNmodel &model, //!< Model description
             allocate_device_variable(os, "unsigned int", "ind" + s.first, false,
                                      numConnections);
 
-            if (model.isSynapseGroupDynamicsRequired(s.first)) {
+            if (s.second.areSynapseDynamicsRequired()) {
                 allocate_device_variable(os, "unsigned int", "preInd" + s.first, false,
                                          numConnections);
             }
@@ -1329,7 +1329,7 @@ void genRunner(const NNmodel &model, //!< Model description
             os << " d_ind" << s.first << ",";
             os << " d_indInG" << s.first << ",";
             os << s.second.getSrcNeuronGroup()->getNumNeurons() <<");" << std::endl;
-            if (model.isSynapseGroupDynamicsRequired(s.first)) {
+            if (s.second.areSynapseDynamicsRequired()) {
                 os << "  initializeSparseArrayPreInd(C" << s.first << ",";
                 os << " d_preInd" << s.first << ");" << std::endl;
             }
@@ -1364,7 +1364,7 @@ void genRunner(const NNmodel &model, //!< Model description
     for(const auto &s : model.getSynapseGroups()) {
         if (s.second.getMatrixType() & SynapseMatrixConnectivity::SPARSE) {
             anySparse = true;
-            if (model.isSynapseGroupDynamicsRequired(s.first)) {
+            if (s.second.areSynapseDynamicsRequired()) {
                 os << "createPreIndices(" << s.second.getSrcNeuronGroup()->getNumNeurons() << ", " << s.second.getTrgNeuronGroup()->getNumNeurons() << ", &C" << s.first << ");" << std::endl;
             }
             if (model.isSynapseGroupPostLearningRequired(s.first)) {
@@ -1435,7 +1435,7 @@ void genRunner(const NNmodel &model, //!< Model description
                 free_device_variable(os, "remap" + s.first, false);
             }
 
-            if (model.isSynapseGroupDynamicsRequired(s.first)) {
+            if (s.second.areSynapseDynamicsRequired()) {
                 free_host_variable(os, "C" + s.first + ".preInd");
                 free_device_variable(os, "preInd" + s.first, false);
             }
@@ -1471,15 +1471,19 @@ void genRunner(const NNmodel &model, //!< Model description
     os << "void stepTimeCPU()" << std::endl;
     os << "{" << std::endl;
     if (!model.getSynapseGroups().empty()) {
-        if (!model.getSynapseDynamicsGroups().empty()) {
-            if (model.isTimingEnabled()) os << "        synDyn_timer.startTimer();" << std::endl;
+        if (model.areSynapseDynamicsRequired()) {
+            if (model.isTimingEnabled()) {
+                os << "        synDyn_timer.startTimer();" << std::endl;
+            }
             os << "        calcSynapseDynamicsCPU(t);" << std::endl;
             if (model.isTimingEnabled()) {
                 os << "        synDyn_timer.stopTimer();" << std::endl;
                 os << "        synDyn_tme+= synDyn_timer.getElapsedTime();" << std::endl;
             }
         }
-        if (model.isTimingEnabled()) os << "        synapse_timer.startTimer();" << std::endl;
+        if (model.isTimingEnabled()) {
+            os << "        synapse_timer.startTimer();" << std::endl;
+        }
         os << "        calcSynapsesCPU(t);" << std::endl;
         if (model.isTimingEnabled()) {
             os << "        synapse_timer.stopTimer();" << std::endl;
@@ -1534,7 +1538,8 @@ void genRunner(const NNmodel &model, //!< Model description
 #ifndef CPU_ONLY
 void genRunnerGPU(const NNmodel &model, //!< Model description
                   const string &path, //!< Path for code generation
-                  const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels)
+                  const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels,
+                  const std::vector<std::unique_ptr<SynapseDynamicsKernel::BaseGPU>> &synapseDynamicsKernels)
 {
 //    cout << "entering GenRunnerGPU" << std::endl;
     string name= path + "/" + model.getName() + "_CODE/runnerGPU.cc";
@@ -2148,13 +2153,6 @@ void genRunnerGPU(const NNmodel &model, //!< Model description
         os << std::endl;
     }
 
-    if (!model.getSynapseDynamicsGroups().empty()) {
-        const unsigned int synDynGridSz = ceil((float)model.getSynapseDynamicsGridSize() / synDynBlkSz);
-        os << "dim3 sDThreads(" << synDynBlkSz << ", 1);" << std::endl;
-        os << "dim3 sDGrid(" << synDynGridSz << ", 1);" << std::endl;
-        os << std::endl;
-    }
-
     const unsigned int neuronGridSz = ceil((float) model.getNeuronGridSize() / neuronBlkSz);
     os << "dim3 nThreads(" << neuronBlkSz << ", 1);" << std::endl;
     if (neuronGridSz < (unsigned int)deviceProp[theDevice].maxGridSize[1]) {
@@ -2166,21 +2164,15 @@ void genRunnerGPU(const NNmodel &model, //!< Model description
     }
     os << std::endl;
     if (!model.getSynapseGroups().empty()) {
-        if (!model.getSynapseDynamicsGroups().empty()) {
-            if (model.isTimingEnabled()) {
-                os << "cudaEventRecord(synDynStart);" << std::endl;
-            }
-            os << "calcSynapseDynamics <<< sDGrid, sDThreads >>> (";
-            for(const auto &p : model.getSynapseDynamicsKernelParameters()) {
-                os << p.first << ", ";
-            }
-            os << "t);" << std::endl;
-            if (model.isTimingEnabled()) {
-                os << "cudaEventRecord(synDynStop);" << std::endl;
+        // Insert calls to synapse dynamics kernels
+        // **TODO** streams
+        for(const auto &d : synapseDynamicsKernels) {
+            if(d->isUsed()) {
+                d->writeKernelCall(os, model.isTimingEnabled());
             }
         }
 
-        // Loop through synaptic event kernels
+        // Insert calls to synaptic event kernels
         // **TODO** streams
         for(const auto &s : synapticEventKernels) {
             // If this kernel is in use, write call
@@ -2229,7 +2221,7 @@ void genRunnerGPU(const NNmodel &model, //!< Model description
             os << "cudaEventElapsedTime(&tmp, learningStart, learningStop);" << std::endl;
             os << "learning_tme+= tmp/1000.0;" << std::endl;
         }
-        if (!model.getSynapseDynamicsGroups().empty()) {
+        if (model.areSynapseDynamicsRequired()) {
             os << "cudaEventElapsedTime(&tmp, synDynStart, synDynStop);" << std::endl;
             os << "lsynDyn_tme+= tmp/1000.0;" << std::endl;
         }

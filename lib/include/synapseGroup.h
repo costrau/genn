@@ -73,15 +73,17 @@ public:
     unsigned int getMaxConnections() const{ return m_MaxConnections; }
     SynapseMatrixType getMatrixType() const{ return m_MatrixType; }
 
-    unsigned int getPaddedDynKernelSize(unsigned int blockSize) const;
     unsigned int getPaddedPostLearnKernelSize(unsigned int blockSize) const;
-
+    
     const NeuronGroup *getSrcNeuronGroup() const{ return m_SrcNeuronGroup; }
     const NeuronGroup *getTrgNeuronGroup() const{ return m_TrgNeuronGroup; }
 
     bool isTrueSpikeRequired() const{ return m_TrueSpikeRequired; }
     bool isSpikeEventRequired() const{ return m_SpikeEventRequired; }
     bool isEventThresholdReTestRequired() const{ return m_EventThresholdReTestRequired; }
+
+    bool areSynapticEventsRequired() const{ return (isTrueSpikeRequired() || isSpikeEventRequired()); }
+    bool areSynapseDynamicsRequired() const{ return !getWUModel()->getSynapseDynamicsCode().empty(); }
 
     const WeightUpdateModels::Base *getWUModel() const{ return m_WUModel; }
 

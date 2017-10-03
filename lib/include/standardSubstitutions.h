@@ -111,7 +111,7 @@ void weightUpdateSim(
 
 void weightUpdateDynamics(
     std::string &SDcode,
-    const SynapseGroup *sg,
+    const SynapseGroup &sg,
     const VarNameIterCtx &wuVars,
     const DerivedParamNameIterCtx &wuDerivedParams,
     const ExtraGlobalParamNameIterCtx &wuExtraGlobalParams,

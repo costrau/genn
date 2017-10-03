@@ -163,7 +163,7 @@ namespace
 }
 */
 
-void genSynapseDynamics(const NNmodel &model, //!< Model description
+/*void genSynapseDynamics(const NNmodel &model, //!< Model description
                         CodeStream &os) //!< Code stream to write code to
 {
     os << "#define BLOCKSZ_SYNDYN " << synDynBlkSz << endl;
@@ -265,7 +265,7 @@ void genSynapseDynamics(const NNmodel &model, //!< Model description
         }
     }
     os << CodeStream::CB(75);
-}
+}*/
 
 void genSynapsePostLearn(const NNmodel &model, //!< Model description
                          CodeStream &os) //!< Code stream to write code to
@@ -960,7 +960,8 @@ void genNeuronKernel(const NNmodel &model, //!< Model description
 
 void genSynapseKernel(const NNmodel &model, //!< Model description
                       const string &path, //!< Path for code generation
-                      const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels)
+                      const std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels,
+                      const std::vector<std::unique_ptr<SynapseDynamicsKernel::BaseGPU>> &synapseDynamicsKernels)
 {
     ofstream fs;
     string name = path + "/" + model.getName() + "_CODE/synapseKrnl.cc";
@@ -989,8 +990,10 @@ void genSynapseKernel(const NNmodel &model, //!< Model description
 
     ///////////////////////////////////////////////////////////////
     // Kernel for updating continuous synapse dynamics
-    if (!model.getSynapseDynamicsGroups().empty()) {
-        genSynapseDynamics(model, os);
+    for(const auto &d : synapseDynamicsKernels) {
+        if(d->isUsed()) {
+            d->generateKernel(os, model.getPrecision());
+        }
     }
 
     ///////////////////////////////////////////////////////////////

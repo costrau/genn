@@ -420,7 +420,7 @@ void genSynapseFunction(const NNmodel &model, //!< Model description
     os << "*/" << std::endl;
     os << "//-------------------------------------------------------------------------" << std::endl << std::endl;
 
-    if (!model.getSynapseDynamicsGroups().empty()) {
+/*    if (!model.getSynapseDynamicsGroups().empty()) {
         // synapse dynamics function
         os << "void calcSynapseDynamicsCPU(" << model.getPrecision() << " t)" << std::endl;
         os << CodeStream::OB(1000);
@@ -498,7 +498,7 @@ void genSynapseFunction(const NNmodel &model, //!< Model description
             }
         }
         os << CodeStream::CB(1000);
-    }
+    }*/
 
     // synapse function header
     os << "void calcSynapsesCPU(" << model.getPrecision() << " t)" << std::endl;

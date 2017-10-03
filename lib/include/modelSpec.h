@@ -209,34 +209,23 @@ public:
     //! the postsynaptic learning kernel (padded to multiples of the GPU thread block size)
     const map<string, std::pair<unsigned int, unsigned int>> &getSynapsePostLearnGroups() const{ return m_SynapsePostLearnGroups; }
 
-    //! Get std::map containing names of synapse groups which require synapse dynamics and their thread IDs within
-    //! the synapse dynamics kernel (padded to multiples of the GPU thread block size)
-    const map<string, std::pair<unsigned int, unsigned int>> &getSynapseDynamicsGroups() const{ return m_SynapseDynamicsGroups; }
-
     //! Gets std::map containing names and types of each parameter that should be passed through to the postsynaptic learning kernel
     const map<string, string> &getSimLearnPostKernelParameters() const{ return simLearnPostKernelParameters; }
-
-    //! Gets std::map containing names and types of each parameter that should be passed through to the synapse dynamics kernel
-    const map<string, string> &getSynapseDynamicsKernelParameters() const{ return synapseDynamicsKernelParameters; }
 
     //! Gets the size of the post-synaptic learning kernel thread grid
     /*! This is calculated by adding together the number of threads required by each
         synapse population's postsynaptic learning kernel, padded to be a multiple of GPU's thread block size.*/
     unsigned int getSynapsePostLearnGridSize() const;
 
-    //! Gets the size of the synapse dynamics kernel thread grid
-    /*! This is calculated by adding together the number of threads required by each
-        synapse population's synapse dynamics kernel, padded to be a multiple of GPU's thread block size.*/
-    unsigned int getSynapseDynamicsGridSize() const;
 
     //! Find a synapse group by name
     const SynapseGroup *findSynapseGroup(const std::string &name) const;
 
     //! Find a synapse group by name
-    SynapseGroup *findSynapseGroup(const std::string &name);    
+    SynapseGroup *findSynapseGroup(const std::string &name);
 
-    //! Does named synapse group have synapse dynamics
-    bool isSynapseGroupDynamicsRequired(const std::string &name) const;
+    //! Are synapse dynamics required by any synapse groups in the model
+    bool areSynapseDynamicsRequired() const;
 
     //! Does named synapse group have post-synaptic learning
     bool isSynapseGroupPostLearningRequired(const std::string &name) const;
@@ -341,15 +330,10 @@ private:
     //!< Mapping  of synapse group names which have postsynaptic learning to their start and end padded indices
     //!< **THINK** is this the right container?
     map<string, std::pair<unsigned int, unsigned int>> m_SynapsePostLearnGroups;
-
-    //!< Mapping of synapse group names which have synapse dynamics to their start and end padded indices
-    //!< **THINK** is this the right container?
-    map<string, std::pair<unsigned int, unsigned int>> m_SynapseDynamicsGroups;
-
+    
     // Kernel members
     map<string, string> neuronKernelParameters;
     map<string, string> simLearnPostKernelParameters;
-    map<string, string> synapseDynamicsKernelParameters;
 
      // Model members
     string name; //!< Name of the neuronal newtwork model
