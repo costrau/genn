@@ -82,11 +82,6 @@ void SynapseGroup::initDerivedParams(double dt)
     }
 }
 
-unsigned int SynapseGroup::getPaddedPostLearnKernelSize(unsigned int blockSize) const
-{
-    return ceil((double) getSrcNeuronGroup()->getNumNeurons() / (double) blockSize) * (double) blockSize;
-}
-
 bool SynapseGroup::isZeroCopyEnabled() const
 {
     // If there are any variables return true
@@ -139,6 +134,36 @@ bool SynapseGroup::arePreVarsRequiredForSynapse(const std::string &code) const
     return false;
 }
 
+bool SynapseGroup::arePostVarsRequiredForSynapse(const std::string &code) const
+{
+    // Get postsynaptic neuron model
+    const auto *postNeuronModel = getTrgNeuronGroup()->getNeuronModel();
+
+    // If postsynaptic neuron is poisson and code references it's voltage - return true
+    if (postNeuronModel->isPoisson() && code.find("$(V_post)") != std::string::npos) {
+        return true;
+    }
+
+    // If code references presynaptic spike time - return true
+    if(code.find("$(sT_post)") != std::string::npos)
+    {
+        return true;
+    }
+
+    // Loop through postsynaptic neuron model variables
+    for(const auto &v : postNeuronModel->getVars()) {
+        // Get name this variable would be referred to in synapse code
+        const std::string postVarName = "$(" + v.first + "_post)";
+
+        // If code references variable - return true
+        if(code.find(postVarName) != std::string::npos)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 void SynapseGroup::addExtraGlobalNeuronParams(std::map<std::string, std::string> &kernelParameters) const
 {
     // Loop through list of extra global weight update parameters

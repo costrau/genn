@@ -73,8 +73,6 @@ public:
     unsigned int getMaxConnections() const{ return m_MaxConnections; }
     SynapseMatrixType getMatrixType() const{ return m_MatrixType; }
 
-    unsigned int getPaddedPostLearnKernelSize(unsigned int blockSize) const;
-    
     const NeuronGroup *getSrcNeuronGroup() const{ return m_SrcNeuronGroup; }
     const NeuronGroup *getTrgNeuronGroup() const{ return m_TrgNeuronGroup; }
 
@@ -84,6 +82,7 @@ public:
 
     bool areSynapticEventsRequired() const{ return (isTrueSpikeRequired() || isSpikeEventRequired()); }
     bool areSynapseDynamicsRequired() const{ return !getWUModel()->getSynapseDynamicsCode().empty(); }
+    bool isPostLearningRequired() const{ return !getWUModel()->getLearnPostCode().empty(); }
 
     const WeightUpdateModels::Base *getWUModel() const{ return m_WUModel; }
 
@@ -105,6 +104,7 @@ public:
     //!< If they do not, additional optimisations can be made
     bool arePreVarsRequiredForTrueSpike() const{ return arePreVarsRequiredForSynapse(getWUModel()->getSimCode()); }
     bool arePreVarsRequiredForSpikeLikeEvent() const{ return arePreVarsRequiredForSynapse(getWUModel()->getEventCode()); }
+    bool arePostVarsRequiredForPostLearning() const{ return arePostVarsRequiredForSynapse(getWUModel()->getLearnPostCode()); }
 
     void addExtraGlobalNeuronParams(std::map<string, string> &kernelParameters) const;
     void addExtraGlobalSynapseParams(std::map<string, string> &kernelParameters) const;
@@ -120,6 +120,7 @@ private:
     // Private methods
     //------------------------------------------------------------------------
     bool arePreVarsRequiredForSynapse(const std::string &code) const;
+    bool arePostVarsRequiredForSynapse(const std::string &code) const;
 
     void addExtraGlobalSimParams(const std::string &prefix, const std::string &suffix, const NewModels::Base::StringPairVec &extraGlobalParameters,
                                  std::map<std::string, std::string> &kernelParameters) const;

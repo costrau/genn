@@ -247,16 +247,6 @@ void NNmodel::activateDirectInput(
     gennError("This function has been deprecated since GeNN 2.2. Use neuron variables, extraGlobalNeuronKernelParameters, or parameters instead.");
 }
 
-unsigned int NNmodel::getSynapsePostLearnGridSize() const
-{
-    if(m_SynapsePostLearnGroups.empty()) {
-        return 0;
-    }
-    else {
-        return m_SynapsePostLearnGroups.rbegin()->second.second;
-    }
-}
-
 const SynapseGroup *NNmodel::findSynapseGroup(const std::string &name) const
 {
     auto synapseGroup = m_SynapseGroups.find(name);
@@ -296,9 +286,13 @@ bool NNmodel::areSynapseDynamicsRequired() const
                        });
 }
 
-bool NNmodel::isSynapseGroupPostLearningRequired(const std::string &name) const
+bool NNmodel::isPostLearningRequired() const
 {
-    return (m_SynapsePostLearnGroups.find(name) != end(m_SynapsePostLearnGroups));
+    return std::any_of(m_SynapseGroups.cbegin(), m_SynapseGroups.cend(),
+                       [](const std::pair<std::string, SynapseGroup> &sg)
+                       {
+                           return sg.second.isPostLearningRequired();
+                       });
 }
 
 //--------------------------------------------------------------------------
@@ -685,20 +679,6 @@ void NNmodel::setPopulationSums()
     for(auto &n : m_NeuronGroups) {
         n.second.calcSizes(neuronBlkSz, neuronIDStart, paddedNeuronIDStart);
     }
-
-    // SYNAPSE groups
-    unsigned int paddedSynapsePostLearnIDStart = 0;
-    for(auto &s : m_SynapseGroups) {
-        if (!s.second.getWUModel()->getLearnPostCode().empty()) {
-            const unsigned int startID = paddedSynapsePostLearnIDStart;
-            paddedSynapsePostLearnIDStart += s.second.getPaddedPostLearnKernelSize(learnBlkSz);
-
-            // Add this synapse group to map of synapse groups with postsynaptic learning
-            // or update the existing entry with the new block sizes
-            m_SynapsePostLearnGroups[s.first] = std::pair<unsigned int, unsigned int>(
-                startID, paddedSynapsePostLearnIDStart);
-        }
-    }
 }
 
 void NNmodel::finalize()
@@ -783,7 +763,6 @@ void NNmodel::finalize()
 
         // Make extra global parameter lists
         s.second.addExtraGlobalNeuronParams(neuronKernelParameters);
-        s.second.addExtraGlobalPostLearnParams(simLearnPostKernelParameters);
     }
 
     setPopulationSums();
@@ -794,7 +773,7 @@ void NNmodel::finalize()
         resetKernel= GENN_FLAGS::calcNeurons;
     }
     else { // there are synapses
-        if (!m_SynapsePostLearnGroups.empty()) {
+        if (isPostLearningRequired()) {
             resetKernel= GENN_FLAGS::learnSynapsesPost;
         }
         else {

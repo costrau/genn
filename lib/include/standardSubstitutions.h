@@ -122,7 +122,7 @@ void weightUpdateDynamics(
 
 void weightUpdatePostLearn(
     std::string &code,
-    const SynapseGroup *sg,
+    const SynapseGroup &sg,
     const DerivedParamNameIterCtx &wuDerivedParams,
     const ExtraGlobalParamNameIterCtx &wuExtraGlobalParams,
     const string &preIdx, //!< index of the pre-synaptic neuron to be accessed for _pre variables; differs for different Span)

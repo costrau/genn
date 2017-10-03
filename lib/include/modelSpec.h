@@ -205,19 +205,6 @@ public:
     //! Get std::map containing all named SynapseGroup objects in model
     const map<string, SynapseGroup> &getSynapseGroups() const{ return m_SynapseGroups; }
 
-    //! Get std::map containing names of synapse groups which require postsynaptic learning and their thread IDs within
-    //! the postsynaptic learning kernel (padded to multiples of the GPU thread block size)
-    const map<string, std::pair<unsigned int, unsigned int>> &getSynapsePostLearnGroups() const{ return m_SynapsePostLearnGroups; }
-
-    //! Gets std::map containing names and types of each parameter that should be passed through to the postsynaptic learning kernel
-    const map<string, string> &getSimLearnPostKernelParameters() const{ return simLearnPostKernelParameters; }
-
-    //! Gets the size of the post-synaptic learning kernel thread grid
-    /*! This is calculated by adding together the number of threads required by each
-        synapse population's postsynaptic learning kernel, padded to be a multiple of GPU's thread block size.*/
-    unsigned int getSynapsePostLearnGridSize() const;
-
-
     //! Find a synapse group by name
     const SynapseGroup *findSynapseGroup(const std::string &name) const;
 
@@ -227,8 +214,8 @@ public:
     //! Are synapse dynamics required by any synapse groups in the model
     bool areSynapseDynamicsRequired() const;
 
-    //! Does named synapse group have post-synaptic learning
-    bool isSynapseGroupPostLearningRequired(const std::string &name) const;
+    //! Is postsynaptic learning required by any synapse groups in the model
+    bool isPostLearningRequired() const;
 
     SynapseGroup *addSynapsePopulation(const string &name, unsigned int syntype, SynapseConnType conntype, SynapseGType gtype, const string& src, const string& trg, const double *p); //!< This function has been depreciated as of GeNN 2.2.
     SynapseGroup *addSynapsePopulation(const string&, unsigned int, SynapseConnType, SynapseGType, unsigned int, unsigned int, const string&, const string&, const double *, const double *, const double *); //!< Overloaded version without initial variables for synapses
@@ -327,13 +314,8 @@ private:
     //!< Named synapse groups
     map<string, SynapseGroup> m_SynapseGroups;
 
-    //!< Mapping  of synapse group names which have postsynaptic learning to their start and end padded indices
-    //!< **THINK** is this the right container?
-    map<string, std::pair<unsigned int, unsigned int>> m_SynapsePostLearnGroups;
-    
     // Kernel members
     map<string, string> neuronKernelParameters;
-    map<string, string> simLearnPostKernelParameters;
 
      // Model members
     string name; //!< Name of the neuronal newtwork model

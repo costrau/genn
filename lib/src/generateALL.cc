@@ -36,6 +36,8 @@
 #include "synapticEventKernel/postParallelisedBitmask.h"
 #include "synapticEventKernel/postParallelisedDense.h"
 #include "synapticEventKernel/postParallelisedSparse.h"
+#include "synapsePostLearnKernel/dense.h"
+#include "synapsePostLearnKernel/sparse.h"
 
 #include <algorithm>
 #include <cmath>
@@ -57,7 +59,8 @@
 void generate_model_runner(const NNmodel &model,  //!< Model description
                            const string &path,      //!< Path where the generated code will be deposited
                            std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels,
-                           std::vector<std::unique_ptr<SynapseDynamicsKernel::BaseGPU>> &synapseDynamicsKernels)
+                           std::vector<std::unique_ptr<SynapseDynamicsKernel::BaseGPU>> &synapseDynamicsKernels,
+                           std::vector<std::unique_ptr<SynapsePostLearnKernel::BaseGPU>> &synapsePostLearnKernels)
 {
 #ifdef _WIN32
   _mkdir((path + "\\" + model.getName() + "_CODE").c_str());
@@ -74,7 +77,8 @@ void generate_model_runner(const NNmodel &model,  //!< Model description
   // GPU specific code generation
   genRunnerGPU(model, path,
                synapticEventKernels,
-               synapseDynamicsKernels);
+               synapseDynamicsKernels,
+               synapsePostLearnKernels);
 
   // generate neuron kernels
   genNeuronKernel(model, path);
@@ -83,7 +87,8 @@ void generate_model_runner(const NNmodel &model,  //!< Model description
   if (!model.getSynapseGroups().empty()) {
       genSynapseKernel(model, path,
                        synapticEventKernels,
-                       synapseDynamicsKernels);
+                       synapseDynamicsKernels,
+                       synapsePostLearnKernels);
   }
 #endif
 
@@ -131,8 +136,8 @@ void assignKernels(const std::map<std::string, GroupType> &groups,
             }
 
             // If no compatible kernel was found, error
-            if(mostCompatibleKernel == nullptr) {
-                gennError("No suitable synaptic event kernel found for synapse population:" + s->first);
+            if(mostCompatibleKernel == nullptr || highestCompatibility < 0) {
+                gennError("No compatible " + std::string(typeid(KernelType).name()) + "-derived kernel found for synapse population:" + s->first);
                 return;
             }
             // Otherwise, add synapse group to this kernel
@@ -147,19 +152,26 @@ void assignKernels(const std::map<std::string, GroupType> &groups,
 void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                   const string &path,     //!< path the generated code will be deposited
                   std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> &synapticEventKernels,
-                  std::vector<std::unique_ptr<SynapseDynamicsKernel::BaseGPU>> &synapseDynamicsKernels)
+                  std::vector<std::unique_ptr<SynapseDynamicsKernel::BaseGPU>> &synapseDynamicsKernels,
+                  std::vector<std::unique_ptr<SynapsePostLearnKernel::BaseGPU>> &synapsePostLearnKernels)
 {
-    enum Kernel{ KernelLearnSynapsesPost, KernelCalcNeurons, KernelLastHardCoded};
+    enum Kernel{ KernelCalcNeurons, KernelLastHardCoded};
 
-    const int KernelMax = KernelLastHardCoded + synapticEventKernels.size() + synapseDynamicsKernels.size();
+    const int KernelMax = KernelLastHardCoded + synapticEventKernels.size() + synapseDynamicsKernels.size() + synapsePostLearnKernels.size();
 
-    vector<string> kernelName = {"learnSynapsesPost", "calcNeurons"};
+    const int KernelLastSynapticEvent = KernelLastHardCoded + synapticEventKernels.size();
+    const int KernelLastSynapseDynamics = KernelLastSynapticEvent + synapseDynamicsKernels.size();
+
+    vector<string> kernelName = {"calcNeurons"};
     kernelName.reserve(KernelMax);
     for(const auto &s : synapticEventKernels) {
         kernelName.push_back(s->getKernelName());
     }
     for(const auto &d : synapseDynamicsKernels) {
         kernelName.push_back(d->getKernelName());
+    }
+    for(const auto &p : synapsePostLearnKernels) {
+        kernelName.push_back(p->getKernelName());
     }
 
     size_t globalMem, mostGlobalMem = 0;
@@ -182,13 +194,6 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
 
         // Get the sizes of each synapse / learn group present on this host and device
         vector<vector<unsigned int>> groupSize(KernelMax);
-        for(const auto &s : model.getSynapseGroups()) {
-            const unsigned int numSrcNeurons = s.second.getSrcNeuronGroup()->getNumNeurons();
-            
-            if (model.isSynapseGroupPostLearningRequired(s.first)) {     // TODO: this needs updating where learning is detected properly!
-                groupSize[KernelLearnSynapsesPost].push_back(numSrcNeurons);
-            }
-        }
 
         // Get the size of each synapse group simulated by each synaptic event kernel
         for(unsigned int s = 0; s < synapticEventKernels.size(); s++) {
@@ -197,7 +202,12 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
 
         // Get the size of each synapse group simulated by each synapse dynamics kernel
         for(unsigned int d = 0; d < synapseDynamicsKernels.size(); d++) {
-            synapseDynamicsKernels[d]->getMaxNumThreads(groupSize[KernelLastHardCoded + synapticEventKernels.size() + d]);
+            synapseDynamicsKernels[d]->getMaxNumThreads(groupSize[KernelLastSynapticEvent + d]);
+        }
+
+        // Get the size of each synapse group simulated by each synapse dynamics kernel
+        for(unsigned int p = 0; p < synapsePostLearnKernels.size(); p++) {
+            synapsePostLearnKernels[p]->getMaxNumThreads(groupSize[KernelLastSynapseDynamics + p]);
         }
 
         // Populate the neuron group size
@@ -324,8 +334,6 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                 krnlAttr[rep].resize(KernelMax);
 
                 // Set candidate block size for each hard-coded kernel
-                learnBlkSz = warpSize*(rep+1);
-
                 neuronBlkSz = warpSize*(rep+1);
                 model.setPopulationSums();
 
@@ -335,13 +343,21 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
                     s->setBlockSize(synapseBlkSz);
                 }
 
+                // Set candidate block size for each synapse dynamics kernel
                 const int synDynBlkSz= warpSize*(rep+1);
                 for(auto &d : synapseDynamicsKernels) {
                     d->setBlockSize(synDynBlkSz);
                 }
 
+                // Set candidate block size for each postsynaptic learning kernel
+                const int learnBlkSz = warpSize*(rep+1);
+                for(auto &p : synapsePostLearnKernels) {
+                    p->setBlockSize(learnBlkSz);
+                }
+
                 // Generate code
-                generate_model_runner(model, path, synapticEventKernels, synapseDynamicsKernels);
+                generate_model_runner(model, path, synapticEventKernels,
+                                      synapseDynamicsKernels, synapsePostLearnKernels);
 
                 // Run NVCC
                 cout << "dry-run compile for device " << theDevice << endl;
@@ -566,23 +582,26 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
         else {
             chosenDevice= GENN_PREFERENCES::defaultDevice;
         }
-        learnBlkSz = bestBlkSz[KernelLearnSynapsesPost][chosenDevice];
         neuronBlkSz = bestBlkSz[KernelCalcNeurons][chosenDevice];
 
         for(unsigned int s = 0; s < synapticEventKernels.size(); s++) {
             synapticEventKernels[s]->setBlockSize(bestBlkSz[KernelLastHardCoded + s][chosenDevice]);
         }
 
-        // Get the size of each synapse group simulated by each synaptic event kernel
+        // Get the size of each synapse group simulated by each synapse dynamics
         for(unsigned int d = 0; d < synapseDynamicsKernels.size(); d++) {
-            synapseDynamicsKernels[d]->setBlockSize(bestBlkSz[KernelLastHardCoded + synapticEventKernels.size() + d][chosenDevice]);
+            synapseDynamicsKernels[d]->setBlockSize(bestBlkSz[KernelLastSynapticEvent + d][chosenDevice]);
+        }
+
+        // Get the size of each synapse group simulated by each postsynaptic learning kernel
+        for(unsigned int p = 0; p < synapsePostLearnKernels.size(); p++) {
+            synapsePostLearnKernels[p]->setBlockSize(bestBlkSz[KernelLastSynapseDynamics + p][chosenDevice]);
         }
     }
 
     // IF OPTIMISATION IS OFF: Simply choose the device with the most global memory.
     else {
         cout << "skipping block size optimisation..." << endl;
-        learnBlkSz= GENN_PREFERENCES::learningBlockSize;
         neuronBlkSz= GENN_PREFERENCES::neuronBlockSize;
 
         // Set all synapse event kernels to use user-specified block size
@@ -592,6 +611,10 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
 
         for(auto &d : synapseDynamicsKernels) {
             d->setBlockSize(GENN_PREFERENCES::synapseDynamicsBlockSize);
+        }
+
+        for(auto &p : synapsePostLearnKernels) {
+            p->setBlockSize(GENN_PREFERENCES::learningBlockSize);
         }
 
         if (GENN_PREFERENCES::autoChooseDevice) {
@@ -634,7 +657,12 @@ void chooseDevice(NNmodel &model, //!< the nn model we are generating code for
             cout << "synapse dynamics kernel '" << d->getKernelName() << "' block size:" << d->getBlockSize() << endl;
         }
     }
-    cout << "learn block size: " << learnBlkSz << endl;
+
+    for(const auto &p : synapsePostLearnKernels) {
+        if(p->isUsed()) {
+            cout << "synapse postsynaptic learning kernel '" << p->getKernelName() << "' block size:" << p->getBlockSize() << endl;
+        }
+    }
     cout << "neuron block size: " << neuronBlkSz << endl;
 }
 #endif
@@ -692,6 +720,7 @@ int main(int argc,     //!< number of arguments; expected to be 2
     string path = argv[1];
     std::vector<std::unique_ptr<SynapticEventKernel::BaseGPU>> synapticEventKernels;
     std::vector<std::unique_ptr<SynapseDynamicsKernel::BaseGPU>> synapseDynamicsKernels;
+    std::vector<std::unique_ptr<SynapsePostLearnKernel::BaseGPU>> synapsePostLearnKernels;
 #ifndef CPU_ONLY
     // Add synaptic event kernels to array
     synapticEventKernels.push_back(std::unique_ptr<SynapticEventKernel::BaseGPU>(new SynapticEventKernel::PostParallelisedBitmask()));
@@ -701,15 +730,20 @@ int main(int argc,     //!< number of arguments; expected to be 2
     synapseDynamicsKernels.push_back(std::unique_ptr<SynapseDynamicsKernel::BaseGPU>(new SynapseDynamicsKernel::Dense()));
     synapseDynamicsKernels.push_back(std::unique_ptr<SynapseDynamicsKernel::BaseGPU>(new SynapseDynamicsKernel::Sparse()));
 
+    synapsePostLearnKernels.push_back(std::unique_ptr<SynapsePostLearnKernel::BaseGPU>(new SynapsePostLearnKernel::Dense()));
+    synapsePostLearnKernels.push_back(std::unique_ptr<SynapsePostLearnKernel::BaseGPU>(new SynapsePostLearnKernel::Sparse()));
+
     // Assign synapse groups to kernels
     assignKernels(model->getSynapseGroups(), synapticEventKernels,
         [](const SynapseGroup &sg){ return sg.areSynapticEventsRequired(); });
     assignKernels(model->getSynapseGroups(), synapseDynamicsKernels,
         [](const SynapseGroup &sg){ return sg.areSynapseDynamicsRequired(); });
+    assignKernels(model->getSynapseGroups(), synapsePostLearnKernels,
+        [](const SynapseGroup &sg){ return sg.isPostLearningRequired(); });
 
-    chooseDevice(*model, path, synapticEventKernels, synapseDynamicsKernels);
+    chooseDevice(*model, path, synapticEventKernels, synapseDynamicsKernels, synapsePostLearnKernels);
 #endif // CPU_ONLY
-    generate_model_runner(*model, path, synapticEventKernels, synapseDynamicsKernels);
+    generate_model_runner(*model, path, synapticEventKernels, synapseDynamicsKernels, synapsePostLearnKernels);
 
     return EXIT_SUCCESS;
 }

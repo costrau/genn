@@ -547,7 +547,7 @@ void genSynapseFunction(const NNmodel &model, //!< Model description
     //////////////////////////////////////////////////////////////
     // function for learning synapses, post-synaptic spikes
 
-    if (!model.getSynapsePostLearnGroups().empty()) {
+    /*if (!model.getSynapsePostLearnGroups().empty()) {
 
         os << "void learnSynapsesPostHost(" << model.getPrecision() << " t)" << std::endl;
         os << CodeStream::OB(811);
@@ -637,7 +637,7 @@ void genSynapseFunction(const NNmodel &model, //!< Model description
             os << CodeStream::CB(950);
         }
         os << CodeStream::CB(811);
-    }
+    }*/
     os << std::endl;
 
 
