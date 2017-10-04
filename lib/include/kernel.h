@@ -15,31 +15,36 @@
 //----------------------------------------------------------------------------
 // Kernel
 //----------------------------------------------------------------------------
-template<typename GroupType>
+template<typename G>
 class Kernel
 {
 public:
     virtual ~Kernel(){}
 
     //------------------------------------------------------------------------
+    // Typedefines
+    //------------------------------------------------------------------------
+    typedef G GroupType;
+
+    //------------------------------------------------------------------------
     // Declared virtuals
     //------------------------------------------------------------------------
     //!< How compatible is this kernel generator with this synapse group?
     //!< Ascending values indicate compatibility and negative numbers indicate incompatible
-    virtual int getCompatibility(const GroupType &sg) const = 0;
+    virtual int getCompatibility(const G &sg) const = 0;
 };
 
 //----------------------------------------------------------------------------
 // KernelGPU
 //----------------------------------------------------------------------------
-template<typename GroupType>
-class KernelGPU : public Kernel<GroupType>
+template<typename G>
+class KernelGPU : public Kernel<G>
 {
 public:
     //------------------------------------------------------------------------
     // Typedefines
     //------------------------------------------------------------------------
-    typedef typename std::map<std::string, GroupType>::const_iterator GroupIter;
+    typedef typename std::map<std::string, G>::const_iterator GroupIter;
     typedef std::tuple<GroupIter, unsigned int, unsigned int> GridEntry;
 
     //------------------------------------------------------------------------
@@ -145,14 +150,14 @@ protected:
     //------------------------------------------------------------------------
     //!< Determine how many threads this synapse group
     //!< requires, not taking into account block size etc
-    virtual unsigned int getMaxNumThreads(const GroupType &sg) const = 0;
+    virtual unsigned int getMaxNumThreads(const G &sg) const = 0;
 
     //------------------------------------------------------------------------
     // Protected API
     //------------------------------------------------------------------------
     //!< Determine how many threads this synapse group
     //!< requires, taking into account block size etc
-    unsigned int getPaddedSize(const GroupType &sg) const
+    unsigned int getPaddedSize(const G &sg) const
     {
         return (unsigned int)(ceil((double)getMaxNumThreads(sg) / (double)getBlockSize()) * (double)getBlockSize());
     }

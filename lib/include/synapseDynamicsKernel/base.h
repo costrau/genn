@@ -32,10 +32,10 @@ public:
 //------------------------------------------------------------------------
 // SynapticEventKernel::BaseStaticGrid
 //------------------------------------------------------------------------
-typedef GPUStaticGrid<SynapseGroup> StaticGrid;
+//typedef GPUStaticGrid<SynapseGroup> StaticGrid;
 //------------------------------------------------------------------------
 //!< Base class for synaptic event kernels which use the GPU and have a static grid
-class BaseStaticGrid : public BaseGPU, public StaticGrid::IWriter
+class BaseStaticGrid : public GPUStaticGrid<BaseGPU>
 {
 public:
     //------------------------------------------------------------------------
@@ -48,18 +48,6 @@ public:
 
         // Add extra global synapse parameters
         sg->second.addExtraGlobalSynapseDynamicsParams(m_ExtraGlobalParameters);
-    }
-
-    //!< Generate a kernel for simulating the specified subset
-    //!< of synapse groups and write it to the CodeStream
-    virtual void generateKernel(CodeStream &os, const std::string &ftype) const override
-    {
-        StaticGrid::generateKernel(os, this, this, ftype);
-    }
-
-    virtual void writeKernelCall(CodeStream &os, bool timingEnabled) const override
-    {
-        StaticGrid::writeKernelCall(os, this, timingEnabled);
     }
 
 };
