@@ -3,6 +3,9 @@
 // Standard C++ includes
 #include <algorithm>
 
+// Standard C includes
+#include <cassert>
+
 // GeNN includes
 #include "codeStream.h"
 #include "standardGeneratedSections.h"
@@ -31,14 +34,17 @@ void SynapseDynamicsKernel::Sparse::generateGlobals(CodeStream &os, const std::s
     os << std::endl;
 }
 //----------------------------------------------------------------------------
-void SynapseDynamicsKernel::Sparse::generateGroup(CodeStream &os, const SynapseGroup &sg, const std::string &ftype) const
+void SynapseDynamicsKernel::Sparse::generateGroup(CodeStream &os, const SynapseGroup &sg,
+                                                  const std::string &ftype, bool isResetKernel) const
 {
-    const auto *wu = sg.getWUModel();
+    // Synapse dynamics kernels don't support resetting
+    assert(!isResetKernel);
 
     // Read delay slot if required
     StandardGeneratedSections::synapseReadDelaySlot(os, sg);
 
     // Create iteration context to iterate over the variables and derived parameters
+    const auto *wu = sg.getWUModel();
     DerivedParamNameIterCtx wuDerivedParams(wu->getDerivedParams());
     ExtraGlobalParamNameIterCtx wuExtraGlobalParams(wu->getExtraGlobalParams());
     VarNameIterCtx wuVars(wu->getVars());

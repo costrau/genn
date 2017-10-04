@@ -144,13 +144,12 @@ void StandardGeneratedSections::synapseReadEventBlockCount(CodeStream &os, unsig
 }
 //----------------------------------------------------------------------------
 void StandardGeneratedSections::synapseResetKernel(
-    CodeStream &os, unsigned int numBlocks,
-    const std::map<std::string, NeuronGroup> &ngs)
+    CodeStream &os, const std::map<std::string, NeuronGroup> &ngs)
 {
     os << "__syncthreads();" << std::endl;
     os << "if (threadIdx.x == 0)" << CodeStream::OB(200);
     os << "j = atomicAdd((unsigned int *) &d_done, 1);" << std::endl;
-    os << "if (j == " << numBlocks - 1 << ")" << CodeStream::OB(210);
+    os << "if (j == (resetBlockCount - 1))" << CodeStream::OB(210);
 
     for(const auto &n : ngs) {
         neuronResetKernel(os, n.second, "dd_");

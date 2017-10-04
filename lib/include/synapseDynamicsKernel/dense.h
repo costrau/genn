@@ -37,6 +37,7 @@ protected:
     //------------------------------------------------------------------------
     virtual void generateGlobals(CodeStream &os, const std::string &ftype) const override;
 
-    virtual void generateGroup(CodeStream &os, const SynapseGroup &sg, const std::string &ftype) const override;
+    virtual void generateGroup(CodeStream &os, const SynapseGroup &sg,
+                               const std::string &ftype, bool isResetKernel) const override;
 };
 }   // namespace SynapseDynamicsKernel

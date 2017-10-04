@@ -36,12 +36,10 @@ protected:
     // KernelGPUStaticGrid virtuals
     //------------------------------------------------------------------------
     virtual void generateGlobals(CodeStream &os, const std::string &ftype,
-                                 bool isResetKernel, unsigned int totalSynapseBlocks,
                                  const std::map<std::string, NeuronGroup> &ngs) const override;
 
     virtual void generateGroup(CodeStream &os, const SynapseGroup &sg, const std::string &ftype,
-                               bool isResetKernel, unsigned int totalSynapseBlocks,
-                               const std::map<std::string, NeuronGroup> &ngs) const override;
+                               bool isResetKernel, const std::map<std::string, NeuronGroup> &ngs) const override;
 private:
     //------------------------------------------------------------------------
     // Private API

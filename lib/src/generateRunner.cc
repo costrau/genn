@@ -163,7 +163,47 @@ void free_variable(CodeStream &os, const string &name, bool zeroCopy)
     free_host_variable(os, name);
     free_device_variable(os, name, zeroCopy);
 }
+
+template<typename Kernel>
+void writeKernelPreamble(CodeStream &os, const std::vector<std::unique_ptr<Kernel>> &kernels)
+{
+    // Write kernel pre-amble for each kernel
+    for(const auto &k : kernels) {
+        if(k->isUsed()) {
+            k->writePreamble(os);
+        }
+    }
 }
+
+template<typename Kernel>
+void writeResetBlockCount(CodeStream &os, const std::vector<std::unique_ptr<Kernel>> &kernels)
+{
+    os << "// Calculate number of blocks to count before resetting" << std::endl;
+    os << "const unsigned int resetBlockCount = ";
+    for(const auto &k : kernels) {
+        // If this kernel is in use, write call
+        if(k->isUsed()) {
+            os << "gridSize" << k->getKernelName() << " + ";
+        }
+    }
+    os << "0;" << std::endl;
+    os << std::endl;
+}
+
+template<typename Kernel>
+void writeKernelCall(CodeStream &os, bool isResetKernel, bool isTimingEnabled,
+                     const std::vector<std::unique_ptr<Kernel>> &kernels)
+{
+    // Insert calls to kernels
+    // **TODO** streams
+    for(const auto &k : kernels) {
+        if(k->isUsed()) {
+            k->writeKernelCall(os, isResetKernel, isTimingEnabled);
+        }
+    }
+}
+
+}   // anonymous namespace
 
 //--------------------------------------------------------------------------
 /*!
@@ -2150,6 +2190,58 @@ void genRunnerGPU(const NNmodel &model, //!< Model description
     os << "// the time stepping procedure (using GPU)" << std::endl;
     os << "void stepTimeGPU()" << std::endl;
     os << CodeStream::OB(1130) << std::endl;
+
+    // Loop through all synaptic event kernels and build set of names of
+    // neuron groups whose spike countrs are required to build grid
+    std::set<const NeuronGroup*> requiredNeuronGroupSpikeCounts;
+    for(const auto &s : synapticEventKernels) {
+        s->getRequiredNeuronGroupSpikeCounts(requiredNeuronGroupSpikeCounts);
+    }
+
+    // Write code to copy current spike counts for these neuron groups
+    for(const auto n : requiredNeuronGroupSpikeCounts) {
+        if(n->isDelayRequired()) {
+            os << "CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCnt" << n->getName();
+            os << "+spkQuePtr" << n->getName() << ", d_glbSpkCnt" << n->getName();
+            os << "+spkQuePtr" << n->getName();
+            os << ", sizeof(unsigned int), cudaMemcpyDeviceToHost));" << std::endl;
+        }
+        else {
+            os << "CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCnt" << n->getName();
+            os << ", d_glbSpkCnt" << n->getName();
+            os << ", sizeof(unsigned int), cudaMemcpyDeviceToHost));" << std::endl;
+        }
+    }
+    os << std::endl;
+
+    // Write pre-ambles for each type of kernel
+    writeKernelPreamble(os, synapticEventKernels);
+    writeKernelPreamble(os, synapseDynamicsKernels);
+    writeKernelPreamble(os, synapsePostLearnKernels);
+
+    // Calculate number of blocks to reset
+    if(model.getResetKernel() == GENN_FLAGS::calcSynapses) {
+        writeResetBlockCount(os, synapticEventKernels);
+    }
+    else if(model.getResetKernel() == GENN_FLAGS::learnSynapsesPost) {
+        writeResetBlockCount(os, synapsePostLearnKernels);
+    }
+
+    os << std::endl;
+
+    // Insert kernel calls
+    writeKernelCall(os, false, model.isTimingEnabled(), synapseDynamicsKernels);
+    writeKernelCall(os, (model.getResetKernel() == GENN_FLAGS::calcSynapses), model.isTimingEnabled(),
+                    synapticEventKernels);
+    writeKernelCall(os, (model.getResetKernel() == GENN_FLAGS::learnSynapsesPost), model.isTimingEnabled(),
+                    synapsePostLearnKernels);
+
+    for(auto &n : model.getNeuronGroups()) {
+        if (n.second.isDelayRequired()) {
+            os << "spkQuePtr" << n.first << " = (spkQuePtr" << n.first << " + 1) % " << n.second.getNumDelaySlots() << ";" << std::endl;
+        }
+    }
+
     const unsigned int neuronGridSz = ceil((float) model.getNeuronGridSize() / neuronBlkSz);
     os << "dim3 nThreads(" << neuronBlkSz << ", 1);" << std::endl;
     if (neuronGridSz < (unsigned int)deviceProp[theDevice].maxGridSize[1]) {
@@ -2159,36 +2251,7 @@ void genRunnerGPU(const NNmodel &model, //!< Model description
         int sqGridSize = ceil((float) sqrt((float) neuronGridSz));
         os << "dim3 nGrid(" << sqGridSize << ","<< sqGridSize <<");" << std::endl;
     }
-    os << std::endl;
-    if (!model.getSynapseGroups().empty()) {
-        // Insert calls to synapse dynamics kernels
-        // **TODO** streams
-        for(const auto &d : synapseDynamicsKernels) {
-            if(d->isUsed()) {
-                d->writeKernelCall(os, model.isTimingEnabled());
-            }
-        }
 
-        // Insert calls to synaptic event kernels
-        // **TODO** streams
-        for(const auto &s : synapticEventKernels) {
-            // If this kernel is in use, write call
-            if(s->isUsed()) {
-                s->writeKernelCall(os, model.isTimingEnabled());
-            }
-        }
-
-        for(const auto &p : synapsePostLearnKernels) {
-            if(p->isUsed()) {
-                p->writeKernelCall(os, model.isTimingEnabled());
-            }
-        }
-    }    
-    for(auto &n : model.getNeuronGroups()) {
-        if (n.second.isDelayRequired()) {
-            os << "spkQuePtr" << n.first << " = (spkQuePtr" << n.first << " + 1) % " << n.second.getNumDelaySlots() << ";" << std::endl;
-        }
-    }
     if (model.isTimingEnabled()) {
         os << "cudaEventRecord(neuronStart);" << std::endl;
     }

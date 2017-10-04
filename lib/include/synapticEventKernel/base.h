@@ -2,6 +2,7 @@
 
 // Standard C++ includes
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -25,10 +26,12 @@ public:
     //------------------------------------------------------------------------
     //!< Generate a kernel for simulating the specified subset
     //!< of synapse groups and write it to the CodeStream
-    virtual void generateKernel(CodeStream &os, bool isResetKernel,
-                                unsigned int totalBlocks,
-                                const std::map<std::string, NeuronGroup> &ngs,
-                                const std::string &ftype) const = 0;
+    virtual void generateKernel(CodeStream &os, const std::string &ftype,
+                                bool isResetKernel, const std::map<std::string, NeuronGroup> &ngs) const = 0;
+
+    //!< Gets set of the names of any neuron groups whose
+    //!< spike counts are required to calculate grid size
+    virtual void getRequiredNeuronGroupSpikeCounts(std::set<const NeuronGroup*> &) const{}
 };
 
 
@@ -36,7 +39,7 @@ public:
 // SynapticEventKernel::BaseStaticGrid
 //------------------------------------------------------------------------
 //!< Base class for synaptic event kernels which use the GPU and have a static grid
-class BaseStaticGrid : public GPUStaticGrid<BaseGPU, bool, unsigned int, const std::map<std::string, NeuronGroup>&>
+class BaseStaticGrid : public GPUStaticGrid<BaseGPU, const std::map<std::string, NeuronGroup>&>
 {
 public:
     //------------------------------------------------------------------------
@@ -56,7 +59,7 @@ public:
 // SynapticEventKernel::BaseDynamicSpikeGrid
 //------------------------------------------------------------------------
 //!< Base class for synaptic event kernels which use the GPU and have a dynamic spike grid
-class BaseDynamicSpikeGrid : public GPUDynamicSpikeGrid<BaseGPU, bool, unsigned int, const std::map<std::string, NeuronGroup>&>
+class BaseDynamicSpikeGrid : public GPUDynamicSpikeGrid<BaseGPU, const std::map<std::string, NeuronGroup>&>
 {
 public:
     //------------------------------------------------------------------------

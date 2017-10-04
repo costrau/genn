@@ -25,7 +25,7 @@ public:
     //------------------------------------------------------------------------
     //!< Generate a kernel for simulating the specified subset
     //!< of synapse groups and write it to the CodeStream
-    virtual void generateKernel(CodeStream &os, const std::string &ftype) const = 0;
+    virtual void generateKernel(CodeStream &os, const std::string &ftype, bool isResetKernel) const = 0;
 };
 
 

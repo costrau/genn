@@ -54,6 +54,5 @@ void synapseReadEventBlockCount(
     const SynapseGroup &sg);
 
 void synapseResetKernel(
-    CodeStream &os, unsigned int numBlocks,
-    const std::map<std::string, NeuronGroup> &ngs);
+    CodeStream &os, const std::map<std::string, NeuronGroup> &ngs);
 }   // namespace StandardGeneratedSections

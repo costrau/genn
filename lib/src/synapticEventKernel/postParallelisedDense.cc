@@ -30,7 +30,6 @@ int SynapticEventKernel::PostParallelisedDense::getCompatibility(const SynapseGr
 }
 //----------------------------------------------------------------------------
 void SynapticEventKernel::PostParallelisedDense::generateGlobals(CodeStream &os, const std::string &ftype,
-                                                                 bool, unsigned int,
                                                                  const std::map<std::string, NeuronGroup>&) const
 {
     // Global variables
@@ -55,8 +54,7 @@ void SynapticEventKernel::PostParallelisedDense::generateGlobals(CodeStream &os,
 }
 //----------------------------------------------------------------------------
 void SynapticEventKernel::PostParallelisedDense::generateGroup(CodeStream &os, const SynapseGroup &sg, const std::string &ftype,
-                                                               bool isResetKernel, unsigned int totalSynapseBlocks,
-                                                               const std::map<std::string, NeuronGroup> &ngs) const
+                                                               bool isResetKernel, const std::map<std::string, NeuronGroup> &ngs) const
 {
     // Read delay slot if required
     StandardGeneratedSections::synapseReadDelaySlot(os, sg);
@@ -89,7 +87,7 @@ void SynapticEventKernel::PostParallelisedDense::generateGroup(CodeStream &os, c
 
     // If this is the reset kernel, insert reset kernel
     if (isResetKernel) {
-        StandardGeneratedSections::synapseResetKernel(os, totalSynapseBlocks, ngs);
+        StandardGeneratedSections::synapseResetKernel(os, ngs);
     }
 }
 //----------------------------------------------------------------------------

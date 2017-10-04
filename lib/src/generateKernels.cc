@@ -768,43 +768,27 @@ void genSynapseKernel(const NNmodel &model, //!< Model description
     // Kernel for updating continuous synapse dynamics
     for(const auto &d : synapseDynamicsKernels) {
         if(d->isUsed()) {
-            d->generateKernel(os, model.getPrecision());
+            d->generateKernel(os, model.getPrecision(), false);
         }
     }
 
     ///////////////////////////////////////////////////////////////
     // Kernel for processing true spikes and spike-like events
 
-    // Determine whethere reset code should be inserted into synapse kernel and how many synapse blocks there are in totals
-    const bool isSynapseResetKernel = (model.getResetKernel() == GENN_FLAGS::calcSynapses);
-    const unsigned int totalSynapseBlocks = std::accumulate(synapticEventKernels.cbegin(), synapticEventKernels.cend(),
-                                                            (unsigned int)0,
-                                                            [](unsigned int a, const std::unique_ptr<SynapticEventKernel::BaseGPU> &s)
-                                                            {
-                                                                return (a + s->getMaxGridSizeBlocks());
-                                                            });
     // Loop through synaptic event kernels and generate code for those in use
+    const bool isSynapseResetKernel = (model.getResetKernel() == GENN_FLAGS::calcSynapses);
     for(const auto &s : synapticEventKernels) {
         if(s->isUsed()) {
-            s->generateKernel(os, isSynapseResetKernel, totalSynapseBlocks,
-                              model.getNeuronGroups(), model.getPrecision());
+            s->generateKernel(os, model.getPrecision(), isSynapseResetKernel, model.getNeuronGroups());
         }
     }
 
     ///////////////////////////////////////////////////////////////
     // Kernel for learning synapses, post-synaptic spikes
-    // Determine whethere reset code should be inserted into post-learning kernel and how many post-learning blocks there are in totals
     const bool isPostLearnResetKernel = (model.getResetKernel() == GENN_FLAGS::learnSynapsesPost);
-    const unsigned int totalPostLearnBlocks = std::accumulate(synapsePostLearnKernels.cbegin(), synapsePostLearnKernels.cend(),
-                                                              (unsigned int)0,
-                                                              [](unsigned int a, const std::unique_ptr<SynapsePostLearnKernel::BaseGPU> &s)
-                                                              {
-                                                                  return (a + s->getMaxGridSizeBlocks());
-                                                              });
     for(const auto &p : synapsePostLearnKernels) {
         if(p->isUsed()) {
-            p->generateKernel(os, isPostLearnResetKernel, totalPostLearnBlocks,
-                              model.getNeuronGroups(), model.getPrecision());
+            p->generateKernel(os, model.getPrecision(), isPostLearnResetKernel, model.getNeuronGroups());
         }
     }
 

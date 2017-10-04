@@ -54,7 +54,10 @@ public:
     virtual std::string getKernelName() const = 0;
 
     //!< Write code to define grid and call kernel
-    virtual void writeKernelCall(CodeStream &os, bool timingEnabled) const = 0;
+    virtual void writeKernelCall(CodeStream &os, bool isResetKernel, bool timingEnabled) const = 0;
+
+    //!< Write code to run before any kernels of this class are launched
+    virtual void writePreamble(CodeStream &os) const = 0;
 
     //!< Add a synapse group to be generated with this event kernel generator
     virtual void addGroup(GroupIter sg)

@@ -24,8 +24,7 @@ int SynapsePostLearnKernel::Sparse::getCompatibility(const SynapseGroup &sg) con
 }
 //----------------------------------------------------------------------------
 void SynapsePostLearnKernel::Sparse::generateGlobals(CodeStream &os, const std::string &,
-                                                    bool, unsigned int,
-                                                    const std::map<std::string, NeuronGroup>&) const
+                                                     const std::map<std::string, NeuronGroup>&) const
 {
     // Global variable
     os << "unsigned int lmax, j, r;" << std::endl;
@@ -40,8 +39,7 @@ void SynapsePostLearnKernel::Sparse::generateGlobals(CodeStream &os, const std::
 }
 //----------------------------------------------------------------------------
 void SynapsePostLearnKernel::Sparse::generateGroup(CodeStream &os, const SynapseGroup &sg, const std::string &ftype,
-                                                   bool isResetKernel, unsigned int totalPostLearnBlocks,
-                                                   const std::map<std::string, NeuronGroup> &ngs) const
+                                                   bool isResetKernel, const std::map<std::string, NeuronGroup> &ngs) const
 {
     const auto *wu = sg.getWUModel();
 
@@ -112,7 +110,7 @@ void SynapsePostLearnKernel::Sparse::generateGroup(CodeStream &os, const Synapse
     os << CodeStream::CB(250);
     os << CodeStream::CB(230);
     if (isResetKernel) {
-        StandardGeneratedSections::synapseResetKernel(os, totalPostLearnBlocks, ngs);
+        StandardGeneratedSections::synapseResetKernel(os, ngs);
     }
 }
 //----------------------------------------------------------------------------

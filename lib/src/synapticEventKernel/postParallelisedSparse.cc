@@ -31,7 +31,6 @@ int SynapticEventKernel::PostParallelisedSparse::getCompatibility(const SynapseG
 }
 //----------------------------------------------------------------------------
 void SynapticEventKernel::PostParallelisedSparse::generateGlobals(CodeStream &os, const std::string &ftype,
-                                                                  bool, unsigned int,
                                                                   const std::map<std::string, NeuronGroup>&) const
 {
     // Global variables
@@ -79,8 +78,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateGlobals(CodeStream &os
 }
 //----------------------------------------------------------------------------
 void SynapticEventKernel::PostParallelisedSparse::generateGroup(CodeStream &os, const SynapseGroup &sg, const std::string &ftype,
-                                                                bool isResetKernel, unsigned int totalSynapseBlocks,
-                                                                const std::map<std::string, NeuronGroup> &ngs) const
+                                                                bool isResetKernel, const std::map<std::string, NeuronGroup> &ngs) const
 {
     const bool useSharedMemory = (sg.getTrgNeuronGroup()->getNumNeurons() <= getBlockSize());
 
@@ -120,7 +118,7 @@ void SynapticEventKernel::PostParallelisedSparse::generateGroup(CodeStream &os, 
 
     // If this is the reset kernel, insert reset kernel
     if (isResetKernel) {
-        StandardGeneratedSections::synapseResetKernel(os, totalSynapseBlocks, ngs);
+        StandardGeneratedSections::synapseResetKernel(os, ngs);
     }
 }
 //----------------------------------------------------------------------------
