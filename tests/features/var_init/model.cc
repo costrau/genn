@@ -15,9 +15,9 @@ suite of minimal models with known analytic outcomes that are used for continuou
 class Neuron : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Neuron, 0, 5);
+    DECLARE_MODEL(Neuron, 0, 6);
 
-    SET_VARS({{"constant", "scalar"}, {"uniform", "scalar"}, {"normal", "scalar"}, {"exponential", "scalar"}, {"gamma", "scalar"}});
+    SET_VARS({{"constant", "scalar"}, {"uniform", "scalar"}, {"normal", "scalar"}, {"exponential", "scalar"}, {"gamma", "scalar"}, {"binomial", "unsigned int"}});
 };
 IMPLEMENT_MODEL(Neuron);
 
@@ -27,9 +27,9 @@ IMPLEMENT_MODEL(Neuron);
 class CurrentSrc : public CurrentSourceModels::Base
 {
 public:
-    DECLARE_MODEL(CurrentSrc, 0, 5);
+    DECLARE_MODEL(CurrentSrc, 0, 6);
 
-    SET_VARS({{"constant", "scalar"}, {"uniform", "scalar"}, {"normal", "scalar"}, {"exponential", "scalar"}, {"gamma", "scalar"}});
+    SET_VARS({{"constant", "scalar"}, {"uniform", "scalar"}, {"normal", "scalar"}, {"exponential", "scalar"}, {"gamma", "scalar"}, {"binomial", "unsigned int"}});
 };
 IMPLEMENT_MODEL(CurrentSrc);
 
@@ -39,9 +39,9 @@ IMPLEMENT_MODEL(CurrentSrc);
 class PostsynapticModel : public PostsynapticModels::Base
 {
 public:
-    DECLARE_MODEL(PostsynapticModel, 0, 5);
+    DECLARE_MODEL(PostsynapticModel, 0, 6);
 
-    SET_VARS({{"pconstant", "scalar"}, {"puniform", "scalar"}, {"pnormal", "scalar"}, {"pexponential", "scalar"}, {"pgamma", "scalar"}});
+    SET_VARS({{"pconstant", "scalar"}, {"puniform", "scalar"}, {"pnormal", "scalar"}, {"pexponential", "scalar"}, {"pgamma", "scalar"}, {"pbinomial", "unsigned int"}});
 };
 IMPLEMENT_MODEL(PostsynapticModel);
 
@@ -51,9 +51,9 @@ IMPLEMENT_MODEL(PostsynapticModel);
 class WeightUpdateModel : public WeightUpdateModels::Base
 {
 public:
-    DECLARE_MODEL(WeightUpdateModel, 0, 5);
+    DECLARE_MODEL(WeightUpdateModel, 0, 6);
 
-    SET_VARS({{"constant", "scalar"}, {"uniform", "scalar"}, {"normal", "scalar"}, {"exponential", "scalar"}, {"gamma", "scalar"}});
+    SET_VARS({{"constant", "scalar"}, {"uniform", "scalar"}, {"normal", "scalar"}, {"exponential", "scalar"}, {"gamma", "scalar"}, {"binomial", "unsigned int"}});
 };
 IMPLEMENT_MODEL(WeightUpdateModel);
 
@@ -80,13 +80,18 @@ void modelDefinition(ModelSpec &model)
         4.0,        // 0 - a
         1.0);       // 1 - b
     
+    InitVarSnippet::Binomial::ParamValues binomialParams(
+        20,         // 0 - n
+        0.5);       // 1 - p
+
     // Neuron parameters
     Neuron::VarValues neuronInit(
         13.0,
         initVar<InitVarSnippet::Uniform>(uniformParams),
         initVar<InitVarSnippet::Normal>(normalParams),
         initVar<InitVarSnippet::Exponential>(exponentialParams),
-        initVar<InitVarSnippet::Gamma>(gammaParams));
+        initVar<InitVarSnippet::Gamma>(gammaParams),
+        initVar<InitVarSnippet::Binomial>(binomialParams));
 
     // Current source parameters
     CurrentSrc::VarValues currentSourceInit(
@@ -94,7 +99,8 @@ void modelDefinition(ModelSpec &model)
         initVar<InitVarSnippet::Uniform>(uniformParams),
         initVar<InitVarSnippet::Normal>(normalParams),
         initVar<InitVarSnippet::Exponential>(exponentialParams),
-        initVar<InitVarSnippet::Gamma>(gammaParams));
+        initVar<InitVarSnippet::Gamma>(gammaParams),
+        initVar<InitVarSnippet::Binomial>(binomialParams));
 
     // PostsynapticModel parameters
     PostsynapticModel::VarValues postsynapticInit(
@@ -102,7 +108,8 @@ void modelDefinition(ModelSpec &model)
         initVar<InitVarSnippet::Uniform>(uniformParams),
         initVar<InitVarSnippet::Normal>(normalParams),
         initVar<InitVarSnippet::Exponential>(exponentialParams),
-        initVar<InitVarSnippet::Gamma>(gammaParams));
+        initVar<InitVarSnippet::Gamma>(gammaParams),
+        initVar<InitVarSnippet::Binomial>(binomialParams));
 
     // WeightUpdateModel parameters
     WeightUpdateModel::VarValues weightUpdateInit(
@@ -110,7 +117,8 @@ void modelDefinition(ModelSpec &model)
         initVar<InitVarSnippet::Uniform>(uniformParams),
         initVar<InitVarSnippet::Normal>(normalParams),
         initVar<InitVarSnippet::Exponential>(exponentialParams),
-        initVar<InitVarSnippet::Gamma>(gammaParams));
+        initVar<InitVarSnippet::Gamma>(gammaParams),
+        initVar<InitVarSnippet::Binomial>(binomialParams));
 
     // Neuron populations
     model.addNeuronPopulation<NeuronModels::SpikeSource>("SpikeSource", 1, {}, {});
