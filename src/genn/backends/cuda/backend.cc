@@ -1479,6 +1479,8 @@ void Backend::genDefinitionsInternalPreamble(CodeStream &os) const
     }
     os << std::endl;
 
+    // The following code is an almost exact copy of numpy's
+    // rk_binomial_inversion function (numpy/random/mtrand/distributions.c)
     os << "template<typename RNG>" << std::endl;
     os << "__device__ inline unsigned int binomialDistFloatInternal(RNG *rng, unsigned int n, float p)" << std::endl;
     {
@@ -1530,6 +1532,8 @@ void Backend::genDefinitionsInternalPreamble(CodeStream &os) const
         }
     }
 
+    // The following code is an almost exact copy of numpy's
+    // rk_binomial_inversion function (numpy/random/mtrand/distributions.c)
     os << "template<typename RNG>" << std::endl;
     os << "__device__ inline unsigned int binomialDistDoubleInternal(RNG *rng, unsigned int n, double p)" << std::endl;
     {
