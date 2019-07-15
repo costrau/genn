@@ -193,7 +193,7 @@ if os.name == "nt":
         os.system(prog + "&& cd " + genn_path + "&&" + "msbuild spineml.sln /verbosity:minimal /t:spineml_generator /p:Configuration=" + config)
     if not os.path.isfile(os.path.join(genn_path,"bin",simulate_executable)):
         print("Compiling Simulate tool")
-        os.system(prog + "&& cd " + genn_path + "&&" + "msbuild spineml.sln /verbosity:minimal /t:spineml_simulator /p:Configuration=Release")
+        os.system(prog + "&& cd " + genn_path + "&&" + "msbuild spineml.sln /verbosity:minimal /t:spineml_standalone_simulator /p:Configuration=Release")
 else:
     makefile = "MakefileSingleThreadedCPU" if cpu_only else "MakefileCUDA"
     generate_executable = "spineml_generator_single_threaded_cpu" if cpu_only else "spineml_generator_cuda"
@@ -201,10 +201,10 @@ else:
 
     if not os.path.isfile(os.path.join(genn_path,"bin", generate_executable)):
         print("Compiling Generate tool")
-        os.system("cd " + os.path.join(genn_path,"src", "spineml_generator") + " && make -f " + makefile)
+        os.system("cd " + os.path.join(genn_path,"src", "spineml", "generator") + " && make -f " + makefile)
     if not os.path.isfile(os.path.join(genn_path,"bin", simulate_executable)):
         print("Compiling Simulate tool")
-        os.system("cd " + os.path.join(genn_path,"src", "spineml_simulator") + " && make")
+        os.system("cd " + os.path.join(genn_path,"src", "spineml", "spineml_standalone_simulator") + " && make")
 
 # Recompile if needed
 if recompile is True:
