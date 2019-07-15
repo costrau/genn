@@ -204,7 +204,7 @@ else:
         os.system("cd " + os.path.join(genn_path,"src", "spineml", "generator") + " && make -f " + makefile)
     if not os.path.isfile(os.path.join(genn_path,"bin", simulate_executable)):
         print("Compiling Simulate tool")
-        os.system("cd " + os.path.join(genn_path,"src", "spineml", "spineml_standalone_simulator") + " && make")
+        os.system("cd " + os.path.join(genn_path,"src", "spineml", "standalone_simulator") + " && make")
 
 # Recompile if needed
 if recompile is True:
